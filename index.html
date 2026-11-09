@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Cubiio2 single-page control application">
-  <title>Cubiio2 · 專案</title>
+  <title>Cubiio2RE</title>
 
   <script>
     (() => {
@@ -593,7 +593,7 @@
               <section class="project-panel" data-project-panel="output" hidden>
                 <label for="project-output-format" class="field-label" data-i18n="projectOutputFormat">輸出格式</label>
                 <select id="project-output-format" class="form-control">
-                  <option value="bmp1">1-bit BMP</option>
+                  <option value="bmp1" data-i18n="projectBmp1Dither">1-bit BMP（0.1 mm/pixel 灰階網點）</option>
                   <option value="bmp8">8-bit 原生 BMP</option>
                   <option value="svg">SVG</option>
                   <option value="gcode">G-code</option>
@@ -605,6 +605,7 @@
                     <label for="project-threshold" class="field-label"><span data-i18n="projectThreshold">黑白門檻</span> · <output id="project-threshold-value">128</output></label>
                     <input id="project-threshold" class="w-full" type="range" min="0" max="255" value="128">
                   </div>
+                  <p id="project-binary-note" class="project-note">0.1 mm/pixel（約 254 DPI）· Floyd–Steinberg 1-bit 誤差擴散；黑點為雷射加工像素。</p>
                 </div>
 
                 <div id="project-vector-options" class="project-option-group" hidden>
@@ -859,6 +860,7 @@
           projectDuplicate: '複製',
           projectDelete: '刪除',
           projectOutputFormat: '輸出格式',
+          projectBmp1Dither: '1-bit BMP（0.1 mm/pixel 灰階網點）',
           projectThreshold: '黑白門檻',
           projectCenterline: '中心線模式',
           projectCenterlineWidth: '單線寬度上限',
@@ -937,6 +939,7 @@
           projectDuplicate: 'Duplicate',
           projectDelete: 'Delete',
           projectOutputFormat: 'Output format',
+          projectBmp1Dither: '1-bit BMP (0.1 mm/pixel grayscale dither)',
           projectThreshold: 'Black / white threshold',
           projectCenterline: 'Centerline mode',
           projectCenterlineWidth: 'Single-line width limit',
@@ -1499,6 +1502,10 @@
         const colors = used || 2 ** bits;
         if ((bits === 1 && colors !== 2) || colors < 1 || colors > 256 || 14 + dib + colors * 4 > bytes.length) throw new Error('BMP 調色盤不足或無效。');
         if (width < 1 || width > 6000 || height < 1 || height > 4000) throw new Error('BMP 尺寸須在 1–6000 × 1–4000 pixels。');
+        const xPpm = view.getInt32(38, true), yPpm = view.getInt32(42, true);
+        const pxPerMmX = xPpm > 0 ? xPpm / 1000 : 10;
+        const pxPerMmY = yPpm > 0 ? yPpm / 1000 : pxPerMmX;
+        if (pxPerMmX < 1 || pxPerMmX > 100 || pxPerMmY < 1 || pxPerMmY > 100) throw new Error('BMP 解析度資訊無效。');
         const stride = Math.ceil(width * bits / 32) * 4;
         const required = stride * height;
         const image = u32(34);
@@ -1523,6 +1530,7 @@
         return {
           width, height, stride, pixelOffset, bits, colors, palette,
           topDown: signedHeight < 0, black,
+          pxPerMmX, pxPerMmY,
           offsetX: u16(6) / 10,
           offsetY: u16(8) / 10
         };
@@ -1797,8 +1805,8 @@
         if (localType !== 'bmp' || !localMeta) return null;
         const offset = bitmapOffsetValues();
         const machine = previewMachine();
-        const width = localMeta.width * .1;
-        const height = localMeta.height * .1;
+        const width = localMeta.width / localMeta.pxPerMmX;
+        const height = localMeta.height / localMeta.pxPerMmY;
         if (!Number.isFinite(offset.x) || !Number.isFinite(offset.y) || offset.x < 0 || offset.y < 0) throw new Error('BMP X／Y offset 須為 0 以上的數值。');
         if (offset.x > 6553.5 || offset.y > 6553.5) throw new Error('BMP X／Y offset 不可超過 6553.5 mm。');
         if (offset.x + width > machine.width + .0005 || offset.y + height > machine.height + .0005) throw new Error(`BMP 超出 ${machine.name} 工作範圍。`);
@@ -1818,8 +1826,8 @@
         fields.hidden = localType !== 'bmp';
         if (localType !== 'bmp' || !localMeta) return;
         const machine = previewMachine();
-        byId('c2-bmp-offset-x').max = Math.max(0, machine.width - localMeta.width * .1).toFixed(1);
-        byId('c2-bmp-offset-y').max = Math.max(0, machine.height - localMeta.height * .1).toFixed(1);
+        byId('c2-bmp-offset-x').max = Math.max(0, machine.width - localMeta.width / localMeta.pxPerMmX).toFixed(1);
+        byId('c2-bmp-offset-y').max = Math.max(0, machine.height - localMeta.height / localMeta.pxPerMmY).toFixed(1);
       }
 
       function localPreviewModel() {
@@ -1829,7 +1837,7 @@
           const y = Number.isFinite(offset.y) ? offset.y : 0;
           return {
             kind: 'bmp', meta: localMeta, bytes: localBytes,
-            bounds: { minX: x, minY: y, maxX: x + localMeta.width * .1, maxY: y + localMeta.height * .1 }
+            bounds: { minX: x, minY: y, maxX: x + localMeta.width / localMeta.pxPerMmX, maxY: y + localMeta.height / localMeta.pxPerMmY }
           };
         }
         if (localBytes && localType === 'gcode') return { kind: 'gcode', ...parseGcodePreview(decoder.decode(localBytes)) };
@@ -2215,7 +2223,9 @@
             localUploadName = 'work.bmp';
             byId('c2-bmp-offset-x').value = localMeta.offsetX.toFixed(1);
             byId('c2-bmp-offset-y').value = localMeta.offsetY.toFixed(1);
-            byId('c2-file-info').textContent = file.name + ' · ' + localMeta.width + ' × ' + localMeta.height + ' · ' + localMeta.bits + '-bit · ' + bytes.length.toLocaleString() + ' bytes';
+            const dpiX = localMeta.pxPerMmX * 25.4, dpiY = localMeta.pxPerMmY * 25.4;
+            const dpiText = Math.abs(dpiX - dpiY) < .1 ? Math.round(dpiX) + ' DPI' : Math.round(dpiX) + ' × ' + Math.round(dpiY) + ' DPI';
+            byId('c2-file-info').textContent = file.name + ' · ' + localMeta.width + ' × ' + localMeta.height + ' · ' + localMeta.bits + '-bit · ' + dpiText + ' · ' + bytes.length.toLocaleString() + ' bytes';
           } else if (/\.gcode$/i.test(file.name)) {
             validateGcode(bytes); localType = 'gcode';
             localUploadName = safeSdName(file.name) ? file.name : 'work.gcode';
@@ -2249,6 +2259,8 @@
       try { byId('c2-preview-machine').value = localStorage.getItem('cubiio2-project-machine') || 'A4'; } catch (_) { byId('c2-preview-machine').value = 'A4'; }
       window.Cubiio2Device = {
         status: () => ({ connected: bleReady() || Boolean(usb.link?.running), usb: Boolean(usb.link?.running), ble: bleReady(), transport: selectedTransport(), ready: fresh() }),
+        snapshot: () => info(),
+        request: (command, timeout) => request(command, selectedTransport(), timeout),
         send: (command) => send(command)
       };
       readJobSettings();
@@ -2276,7 +2288,8 @@
         A4: { name: 'A4', width: 297, height: 210 },
         A3: { name: 'A3', width: 420, height: 297 }
       };
-      const BMP_PX_PER_MM = 10;
+      const BMP_NATIVE_PX_PER_MM = 10;
+      const BMP_1BIT_PX_PER_MM = 10;
       const VECTOR_PX_PER_MM = 4;
       const VECTOR_FONT_URLS = {
         'IBM Plex Sans': 'https://cdn.jsdelivr.net/gh/IBM/plex@master/packages/plex-sans/fonts/complete/ttf/IBMPlexSans-Regular.ttf',
@@ -2821,7 +2834,35 @@
         return { minX, minY, maxX, maxY, width: maxX - minX + 1, height: maxY - minY + 1 };
       }
 
-      function encodeBmp(image, bounds, bits, threshold, pxPerMm) {
+      function dither1Bit(image, bounds, threshold = 128) {
+        const { width, height } = bounds;
+        const output = new Uint8Array(width * height);
+        let rowError = new Float32Array(width);
+        let nextError = new Float32Array(width);
+        for (let y = 0; y < height; y++) {
+          nextError.fill(0);
+          const reverse = y % 2 === 1;
+          const start = reverse ? width - 1 : 0;
+          const end = reverse ? -1 : width;
+          const step = reverse ? -1 : 1;
+          for (let x = start; x !== end; x += step) {
+            const index = y * width + x;
+            const source = ((bounds.minY + y) * image.width + bounds.minX + x) * 4;
+            const oldValue = Math.max(0, Math.min(255, luminance(image.data, source) + rowError[x]));
+            const newValue = oldValue < threshold ? 0 : 255;
+            const error = oldValue - newValue;
+            output[index] = newValue;
+            if (x + step >= 0 && x + step < width) rowError[x + step] += error * 7 / 16;
+            if (x - step >= 0 && x - step < width) nextError[x - step] += error * 3 / 16;
+            nextError[x] += error * 5 / 16;
+            if (x + step >= 0 && x + step < width) nextError[x + step] += error * 1 / 16;
+          }
+          [rowError, nextError] = [nextError, rowError];
+        }
+        return output;
+      }
+
+      function encodeBmp(image, bounds, bits, threshold, pxPerMm, dithered = null) {
         const paletteSize = bits === 1 ? 8 : 1024;
         const stride = Math.ceil(bounds.width * bits / 32) * 4;
         const pixelOffset = 14 + 40 + paletteSize;
@@ -2858,7 +2899,11 @@
             const sourceX = bounds.minX + x;
             const lum = luminance(image.data, (sourceY * image.width + sourceX) * 4);
             if (bits === 8) bytes[rowAt + x] = lum;
-            else if (lum >= threshold) bytes[rowAt + (x >> 3)] |= 1 << (7 - (x & 7));
+            else {
+              const topY = sourceY - bounds.minY;
+              const value = dithered?.[topY * bounds.width + x] ?? (lum < threshold ? 0 : 255);
+              if (value === 255) bytes[rowAt + (x >> 3)] |= 1 << (7 - (x & 7));
+            }
           }
         }
         return { blob: new Blob([buffer], { type: 'image/bmp' }), originX, originY, width: bounds.width / pxPerMm, height: bounds.height / pxPerMm };
@@ -3396,17 +3441,221 @@
         };
       }
 
-      function prepareVectorPath(raw, options, pxPerMm, offsetX, offsetY) {
-        const closed = Boolean(raw.closed);
-        let path;
-        if (closed) {
-          path = simplifyClosedPath(raw, .5);
-          if (path.length) path.push({ ...path[0] });
-        } else path = simplifyOpenPath(raw, .5);
-        path = smoothPathChaikin(path, options.smoothing);
-        path = resamplePath(path, options.resolution * pxPerMm);
-        if (closed && path.length && (path[0].x !== path.at(-1).x || path[0].y !== path.at(-1).y)) path.push({ ...path[0] });
-        path = path.map((point) => ({ x: point.x + offsetX, y: point.y + offsetY }));
+      // High-quality raster tracing adapted from draw_1104.html:
+      // sub-pixel marching squares, corner-preserving Taubin smoothing and
+      // curvature-aware simplification. Native SVG and text paths bypass it.
+      function buildRasterInkField(image, bounds, threshold) {
+        const width = bounds.width, height = bounds.height;
+        const fieldWidth = width + 2, fieldHeight = height + 2;
+        const field = new Float32Array(fieldWidth * fieldHeight).fill(-Math.max(1, threshold));
+        for (let y = 0; y < height; y++) {
+          let output = (y + 1) * fieldWidth + 1;
+          let source = ((bounds.minY + y) * image.width + bounds.minX) * 4;
+          for (let x = 0; x < width; x++, output++, source += 4) {
+            const alpha = image.data[source + 3] / 255;
+            const grey = (image.data[source] * .299 + image.data[source + 1] * .587 + image.data[source + 2] * .114) * alpha + 255 * (1 - alpha);
+            field[output] = threshold - grey;
+          }
+        }
+        return { field, width: fieldWidth, height: fieldHeight };
+      }
+
+      function traceRasterMarchingSquares(field, width, height) {
+        const top = 0, right = 1, bottom = 2, left = 3;
+        const table = [
+          [], [[top, left]], [[right, top]], [[right, left]], [[bottom, right]], null, [[bottom, top]], [[bottom, left]],
+          [[left, bottom]], [[top, bottom]], null, [[right, bottom]], [[left, right]], [[top, right]], [[left, top]], []
+        ];
+        const next = new Map();
+        for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) {
+          const at = y * width + x;
+          const v0 = field[at], v1 = field[at + 1], v2 = field[at + width + 1], v3 = field[at + width];
+          const caseIndex = (v0 > 0 ? 1 : 0) | (v1 > 0 ? 2 : 0) | (v2 > 0 ? 4 : 0) | (v3 > 0 ? 8 : 0);
+          if (caseIndex === 0 || caseIndex === 15) continue;
+          let segments = table[caseIndex];
+          if (!segments) {
+            const centerInk = v0 + v1 + v2 + v3 > 0;
+            if (caseIndex === 5) segments = centerInk ? [[top, right], [bottom, left]] : [[top, left], [bottom, right]];
+            else segments = centerInk ? [[left, top], [right, bottom]] : [[right, top], [left, bottom]];
+          }
+          const keys = [2 * at, 2 * at + 3, 2 * (at + width), 2 * at + 1];
+          for (const segment of segments) next.set(keys[segment[0]], keys[segment[1]]);
+        }
+        const position = (key) => {
+          const vertical = key & 1, index = (key - vertical) / 2;
+          const x = index % width, y = (index - x) / width;
+          const a = field[index], b = vertical ? field[index + width] : field[index + 1];
+          const denominator = a - b;
+          const t = Math.abs(denominator) > 1e-12 ? a / denominator : .5;
+          return vertical ? { x: x - .5, y: y + t - .5 } : { x: x + t - .5, y: y - .5 };
+        };
+        const loops = [];
+        for (const start of [...next.keys()]) {
+          if (!next.has(start)) continue;
+          const ring = [];
+          let key = start;
+          while (next.has(key)) {
+            ring.push(position(key));
+            const following = next.get(key);
+            next.delete(key);
+            key = following;
+          }
+          if (ring.length >= 3 && key === start) loops.push(ring);
+        }
+        return loops;
+      }
+
+      function rasterPathLength(points, closed) {
+        let length = 0;
+        for (let index = 1; index < points.length; index++) length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
+        if (closed && points.length > 1) length += Math.hypot(points[0].x - points.at(-1).x, points[0].y - points.at(-1).y);
+        return length;
+      }
+
+      function resampleRasterPath(points, closed, step) {
+        const source = closed ? points.concat([points[0]]) : points;
+        const length = rasterPathLength(source, false);
+        if (length < 1e-9 || source.length < 2) return points;
+        const count = Math.max(closed ? 8 : 2, Math.round(length / step));
+        const spacing = length / count, total = closed ? count : count + 1;
+        const output = [];
+        let segment = 0, segmentStart = 0;
+        let segmentLength = Math.hypot(source[1].x - source[0].x, source[1].y - source[0].y);
+        for (let index = 0; index < total; index++) {
+          const target = index * spacing;
+          while (segment < source.length - 2 && segmentStart + segmentLength < target) {
+            segmentStart += segmentLength;
+            segment++;
+            segmentLength = Math.hypot(source[segment + 1].x - source[segment].x, source[segment + 1].y - source[segment].y);
+          }
+          const ratio = segmentLength > 0 ? Math.min(1, Math.max(0, (target - segmentStart) / segmentLength)) : 0;
+          output.push({
+            x: source[segment].x + (source[segment + 1].x - source[segment].x) * ratio,
+            y: source[segment].y + (source[segment + 1].y - source[segment].y) * ratio
+          });
+        }
+        if (!closed) output[output.length - 1] = { ...points.at(-1) };
+        return output;
+      }
+
+      function rasterLaplacianPass(xs, ys, nextX, nextY, closed, factor, pinned) {
+        const count = xs.length, low = closed ? 0 : 1, high = closed ? count : count - 1;
+        nextX.set(xs); nextY.set(ys);
+        for (let index = low; index < high; index++) {
+          if (pinned?.[index]) continue;
+          const before = index === 0 ? count - 1 : index - 1;
+          const after = index === count - 1 ? 0 : index + 1;
+          nextX[index] = xs[index] + factor * ((xs[before] + xs[after]) * .5 - xs[index]);
+          nextY[index] = ys[index] + factor * ((ys[before] + ys[after]) * .5 - ys[index]);
+        }
+      }
+
+      function detectRasterCorners(points, closed, step) {
+        const count = points.length, pinned = new Uint8Array(count);
+        const span = Math.max(3, Math.round(4 / step)), shortSpan = Math.max(2, Math.round(span / 2));
+        if (count < 3 * span) return pinned;
+        let xs = Float64Array.from(points, (point) => point.x), ys = Float64Array.from(points, (point) => point.y);
+        let nextX = new Float64Array(count), nextY = new Float64Array(count);
+        for (let pass = 0; pass < 6; pass++) {
+          rasterLaplacianPass(xs, ys, nextX, nextY, closed, .5, null);
+          [xs, nextX] = [nextX, xs]; [ys, nextY] = [nextY, ys];
+        }
+        const wrap = (index) => ((index % count) + count) % count;
+        const turn = (index, distance) => {
+          const previous = closed ? wrap(index - distance) : index - distance;
+          const following = closed ? wrap(index + distance) : index + distance;
+          const ax = xs[index] - xs[previous], ay = ys[index] - ys[previous];
+          const bx = xs[following] - xs[index], by = ys[following] - ys[index];
+          const aLength = Math.hypot(ax, ay), bLength = Math.hypot(bx, by);
+          if (aLength < 1e-9 || bLength < 1e-9) return 0;
+          return Math.acos(Math.max(-1, Math.min(1, (ax * bx + ay * by) / (aLength * bLength))));
+        };
+        const threshold = 40 * Math.PI / 180;
+        const turns = new Float32Array(count);
+        const low = closed ? 0 : span, high = closed ? count : count - span;
+        for (let index = low; index < high; index++) {
+          const angle = turn(index, span);
+          turns[index] = angle > threshold && turn(index, shortSpan) > .55 * angle ? angle : 0;
+        }
+        for (let index = low; index < high; index++) {
+          if (!turns[index]) continue;
+          let maximum = true;
+          for (let delta = -span; delta <= span && maximum; delta++) {
+            if (!delta) continue;
+            const candidate = closed ? wrap(index + delta) : index + delta;
+            if (candidate < low || candidate >= high) continue;
+            if (turns[candidate] > turns[index] || (turns[candidate] === turns[index] && delta < 0)) maximum = false;
+          }
+          if (maximum) pinned[index] = 1;
+        }
+        return pinned;
+      }
+
+      function snapRasterCorners(points, pinned, closed) {
+        const count = points.length, near = 3, far = 7;
+        if (count < 2 * far + 2) return;
+        const get = (index) => closed ? points[((index % count) + count) % count] : points[index];
+        for (let index = 0; index < count; index++) {
+          if (!pinned[index] || (!closed && (index - far < 0 || index + far >= count))) continue;
+          const a1 = get(index - far), a2 = get(index - near), b1 = get(index + near), b2 = get(index + far);
+          const adx = a2.x - a1.x, ady = a2.y - a1.y, bdx = b2.x - b1.x, bdy = b2.y - b1.y;
+          const denominator = adx * bdy - ady * bdx;
+          const aLength = Math.hypot(adx, ady), bLength = Math.hypot(bdx, bdy);
+          if (aLength < 1e-6 || bLength < 1e-6 || Math.abs(denominator) / (aLength * bLength) < .3) continue;
+          const t = ((b1.x - a1.x) * bdy - (b1.y - a1.y) * bdx) / denominator;
+          const intersection = { x: a1.x + adx * t, y: a1.y + ady * t };
+          if (Math.hypot(intersection.x - points[index].x, intersection.y - points[index].y) < 2.5) points[index] = intersection;
+        }
+      }
+
+      function taubinSmoothRasterPath(points, closed, pinned, iterations) {
+        const count = points.length;
+        if (count < 3 || iterations <= 0) return points;
+        let xs = Float64Array.from(points, (point) => point.x), ys = Float64Array.from(points, (point) => point.y);
+        let nextX = new Float64Array(count), nextY = new Float64Array(count);
+        for (let pass = 0; pass < iterations; pass++) for (const factor of [.5, -.53]) {
+          rasterLaplacianPass(xs, ys, nextX, nextY, closed, factor, pinned);
+          [xs, nextX] = [nextX, xs]; [ys, nextY] = [nextY, ys];
+        }
+        return Array.from(xs, (x, index) => ({ x: Math.round(x * 1000) / 1000, y: Math.round(ys[index] * 1000) / 1000 }));
+      }
+
+      const RASTER_SMOOTHING_ITERATIONS = [0, 6, 12, 22, 36, 60, 100];
+
+      function refineRasterPath(raw, closed, level, pinStart) {
+        let points = raw;
+        if (closed && points.length > 1 && points[0].x === points.at(-1).x && points[0].y === points.at(-1).y) points = points.slice(0, -1);
+        if (points.length < 3 || level <= 0) return points;
+        const step = .75;
+        points = resampleRasterPath(points, closed, step);
+        const pinned = rasterPathLength(points, closed) < 30 ? new Uint8Array(points.length) : detectRasterCorners(points, closed, step);
+        snapRasterCorners(points, pinned, closed);
+        if (pinStart && pinned.length) pinned[0] = 1;
+        return taubinSmoothRasterPath(points, closed, pinned, RASTER_SMOOTHING_ITERATIONS[Math.min(level, RASTER_SMOOTHING_ITERATIONS.length - 1)]);
+      }
+
+      function simplifyRasterRing(points, epsilon) {
+        if (points.length < 4) return points;
+        let farthest = 1, best = -1;
+        for (let index = 1; index < points.length; index++) {
+          const distance = (points[index].x - points[0].x) ** 2 + (points[index].y - points[0].y) ** 2;
+          if (distance > best) { best = distance; farthest = index; }
+        }
+        const first = simplifyOpenPath(points.slice(0, farthest + 1), epsilon);
+        const second = simplifyOpenPath(points.slice(farthest).concat([points[0]]), epsilon);
+        return first.concat(second.slice(1, -1));
+      }
+
+      function finalizeRasterPath(points, closed, segmentPixels, level) {
+        if (points.length < 3) return points;
+        const epsilon = level === 0 ? .35 : Math.max(.08, segmentPixels * .02);
+        return closed ? simplifyRasterRing(points, epsilon) : simplifyOpenPath(points, epsilon);
+      }
+
+      function offsetRasterPath(raw, closed, options, composite, bounds, pinStart) {
+        let path = refineRasterPath(raw, closed, options.smoothing, pinStart);
+        path = finalizeRasterPath(path, closed, options.resolution * composite.pxPerMm, options.smoothing);
+        path = path.map((point) => ({ x: point.x + bounds.minX, y: point.y + bounds.minY }));
         path.closed = closed;
         return path;
       }
@@ -3420,11 +3669,20 @@
           const source = ((bounds.minY + y) * composite.image.width + bounds.minX + x) * 4;
           mask[y * bounds.width + x] = luminance(composite.image.data, source) < threshold ? 1 : 0;
         }
-        const rawPaths = options.centerline
-          ? traceHybridLines(mask, bounds.width, bounds.height, options.noise, options.centerlineWidth)
-          : traceBlockOutlines(filterSmallComponents(mask, bounds.width, bounds.height, options.noise), bounds.width, bounds.height);
-        const paths = rawPaths.map((path) => prepareVectorPath(path, options, composite.pxPerMm, bounds.minX, bounds.minY))
-          .filter((path) => path.length >= (path.closed ? 4 : 2));
+
+        let paths;
+        if (options.centerline) {
+          paths = traceHybridLines(mask, bounds.width, bounds.height, options.noise, options.centerlineWidth)
+            .map((raw) => offsetRasterPath(raw, Boolean(raw.closed), options, composite, bounds, true))
+            .filter((path) => path.length >= (path.closed ? 3 : 2));
+        } else {
+          const ink = buildRasterInkField(composite.image, bounds, threshold);
+          paths = traceRasterMarchingSquares(ink.field, ink.width, ink.height)
+            .filter((raw) => rasterPathLength(raw, true) > options.noise)
+            .map((raw) => offsetRasterPath(raw, true, options, composite, bounds, false))
+            .filter((path) => path.length >= 3);
+        }
+
         if (!paths.length) throw new Error('無法建立向量路徑。');
         return { paths, bounds, pxPerMm: composite.pxPerMm, options };
       }
@@ -3482,16 +3740,21 @@
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       }
 
-      function createRasterPreview(composite, bits, threshold) {
+      function createRasterPreview(composite, bits, bounds, dithered = null) {
         const preview = document.createElement('canvas');
         preview.width = composite.image.width; preview.height = composite.image.height;
         const ctx = preview.getContext('2d');
         const image = new ImageData(new Uint8ClampedArray(composite.image.data), composite.image.width, composite.image.height);
         for (let index = 0; index < image.data.length; index += 4) {
           const value = luminance(image.data, index);
-          const output = bits === 1 ? (value < threshold ? 0 : 255) : value;
+          const output = bits === 1 ? 255 : value;
           image.data[index] = image.data[index + 1] = image.data[index + 2] = output;
           image.data[index + 3] = 255;
+        }
+        if (bits === 1) for (let y = 0; y < bounds.height; y++) for (let x = 0; x < bounds.width; x++) {
+          const output = dithered?.[y * bounds.width + x] ?? 255;
+          const index = ((bounds.minY + y) * image.width + bounds.minX + x) * 4;
+          image.data[index] = image.data[index + 1] = image.data[index + 2] = output;
         }
         ctx.putImageData(image, 0, 0);
         return preview;
@@ -3512,14 +3775,18 @@
           await document.fonts?.ready;
           let converted;
           if (format === 'bmp1' || format === 'bmp8') {
-            const composite = renderComposite(BMP_PX_PER_MM);
             const bits = format === 'bmp1' ? 1 : 8;
-            const bounds = nonWhiteBounds(composite.image, bits === 1 ? threshold : 250);
+            const pxPerMm = bits === 1 ? BMP_1BIT_PX_PER_MM : BMP_NATIVE_PX_PER_MM;
+            const composite = renderComposite(pxPerMm);
+            const bounds = nonWhiteBounds(composite.image, bits === 1 ? 254 : 250);
             if (!bounds) throw new Error('畫布沒有可輸出的非白色內容。');
-            const result = encodeBmp(composite.image, bounds, bits, threshold, BMP_PX_PER_MM);
-            const filename = `cubiio2_${project.machine.name}_${format}_X${result.originX.toFixed(1)}_Y${result.originY.toFixed(1)}.bmp`;
-            converted = { format, blob: result.blob, filename, previewCanvas: createRasterPreview(composite, bits, threshold), revision: project.revision };
-            converted.status = `已轉檔 ${result.width.toFixed(1)} × ${result.height.toFixed(1)} mm · 原點 X${result.originX.toFixed(1)} Y${result.originY.toFixed(1)} mm`;
+            const dithered = bits === 1 ? dither1Bit(composite.image, bounds, threshold) : null;
+            const result = encodeBmp(composite.image, bounds, bits, threshold, pxPerMm, dithered);
+            const dpiTag = bits === 1 ? '_0p1mm_dither' : '';
+            const filename = `cubiio2_${project.machine.name}_${format}${dpiTag}_X${result.originX.toFixed(1)}_Y${result.originY.toFixed(1)}.bmp`;
+            converted = { format, blob: result.blob, filename, previewCanvas: createRasterPreview(composite, bits, bounds, dithered), revision: project.revision };
+            const rasterMode = bits === 1 ? ' · 0.1 mm/pixel（約 254 DPI）· Floyd–Steinberg 1-bit 灰階網點' : ' · 0.1 mm/pixel · 8-bit 灰階';
+            converted.status = `已轉檔 ${result.width.toFixed(1)} × ${result.height.toFixed(1)} mm · 原點 X${result.originX.toFixed(1)} Y${result.originY.toFixed(1)} mm${rasterMode}`;
           } else {
             const options = currentVectorOptions();
             const nativePaths = await collectNativeVectorPaths(VECTOR_PX_PER_MM, options);
@@ -3575,6 +3842,11 @@
         $('project-vector-options').hidden = !isVector;
         $('project-binary-options').hidden = format === 'bmp8' || (isVector && !hasRaster);
         $('project-gcode-fields').hidden = format !== 'gcode';
+        const binaryNote = $('project-binary-note');
+        binaryNote.hidden = format !== 'bmp1';
+        binaryNote.textContent = document.documentElement.lang === 'en'
+          ? '0.1 mm/pixel (about 254 DPI) · Floyd–Steinberg 1-bit error diffusion; black dots are laser engraving pixels.'
+          : '0.1 mm/pixel（約 254 DPI）· Floyd–Steinberg 1-bit 誤差擴散；黑點為雷射加工像素。';
         const centerlineEnabled = $('project-centerline').getAttribute('aria-pressed') === 'true';
         document.querySelectorAll('[data-raster-vector-option]').forEach((element) => {
           element.hidden = isVector && (!hasRaster || (element.id === 'project-centerline-width-row' && !centerlineEnabled));
@@ -3690,13 +3962,17 @@
       const state = {
         flow: null, step: 1, jog: 1, x: 0, y: 0, power: 20,
         focusValue: '', calibrationStarted: false, completed: false,
-        firmwareDownloaded: false
+        firmwareDownloaded: false, busy: false, laserOn: false,
+        homeX: 0, homeY: 0, travelX: 0, travelY: 0,
+        savedWidth: 0, savedHeight: 0
       };
       let lastConnectionKey = '';
 
       const isEnglish = () => document.documentElement.lang === 'en';
       const text = (zh, en) => isEnglish() ? en : zh;
       const deviceStatus = () => window.Cubiio2Device?.status?.() || { connected: false, usb: false, ble: false, ready: false };
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const quantizeMm = (mm) => Math.sign(mm) * Math.floor(Math.abs(mm) * 80 + .5) / 80;
       const flowMeta = () => ({
         zero: { title: text('校正零點', 'Zero calibration'), total: 4 },
         focus: { title: text('校正對焦', 'Focus calibration'), total: 4 },
@@ -3704,6 +3980,165 @@
       })[state.flow];
 
       function setStatus(message) { byId('maintenance-status').textContent = message; }
+
+      async function deviceCommand(command, timeout) {
+        const api = window.Cubiio2Device;
+        if (!api?.request) throw new Error(text('裝置通訊尚未就緒。', 'Device communication is not ready.'));
+        return api.request(command, timeout);
+      }
+
+      async function readDeviceStatus() {
+        return deviceCommand('STATUS', 5000);
+      }
+
+      async function waitForDevice(predicate, timeout, timeoutMessage) {
+        const startedAt = performance.now();
+        while (performance.now() - startedAt < timeout) {
+          const status = await readDeviceStatus();
+          if (predicate(status)) return status;
+          await delay(160);
+        }
+        throw new Error(timeoutMessage);
+      }
+
+      function assertZeroReady(status) {
+        const connection = deviceStatus();
+        if (!connection.connected || !connection.ready) throw new Error(text('請先到裝置頁連線 Cubiio2。', 'Connect Cubiio2 from the Device page first.'));
+        if (status?.locked) throw new Error(text('裝置目前鎖定，無法進行校正。', 'The device is locked and cannot be calibrated.'));
+
+        if (status?.gc?.p !== 9 || !Array.isArray(status.gc.cfg) || status.gc.cfg.length < 8) {
+          throw new Error(text('韌體不支援 SD 機台校正，請先更新韌體。', 'The firmware does not support SD machine calibration. Update it first.'));
+        }
+        if (!status.gc.cfg[7]) throw new Error(text('HOME 感測器設定不可用，無法量測零點。', 'HOME sensors are unavailable, so zero cannot be measured.'));
+      }
+
+      async function safeZeroStop(releaseMotors = false) {
+        await deviceCommand('LOFF', 3000).catch(() => {});
+        await deviceCommand('MSTOP', 3000).catch(() => {});
+        if (releaseMotors) await deviceCommand('XYEN 1', 3000).catch(() => {});
+        state.laserOn = false;
+      }
+
+      function calibrationConfigCommand(width, height, status) {
+        const gc = status?.gc;
+        const cfg = gc?.cfg;
+        if (!Array.isArray(cfg) || cfg.length < 6) throw new Error(text('無法讀取目前的機台設定。', 'Current machine settings could not be read.'));
+        const values = [width, height, Number(cfg[2]), Number(cfg[3]), Number(cfg[4]), Number(cfg[5])];
+        const bounds = [[10, 1000], [10, 1000], [1, 500], [.001, .1], [60, 2400], [1, 65535]];
+        values.forEach((value, index) => {
+          if (!Number.isFinite(value) || value < bounds[index][0] || value > bounds[index][1]) {
+            throw new Error(text('量測結果或既有機台設定超出允許範圍。', 'The measured result or current machine setting is out of range.'));
+          }
+        });
+        const workspace = ['A4', 'A3'].includes(gc.workspace) ? gc.workspace : 'A4';
+        const dynamic = cfg.length > 8 ? Number(Boolean(Number(cfg[8]))) : 1;
+        const comp = Number(gc.comp_k);
+        const suffix = Number.isFinite(comp) && comp >= 0 && comp <= 2 ? ` K${comp.toFixed(4)}` : '';
+        return `GCONFIG ${values.join(' ')} D${dynamic} ${workspace}${suffix}`;
+      }
+
+      async function startZeroCalibration() {
+        state.busy = true;
+        renderStep();
+        setStatus(text('正在回到右上角 HOME，請勿移動機器。', 'Homing to the upper-right corner. Do not move the machine.'));
+        try {
+          let status = await readDeviceStatus();
+          assertZeroReady(status);
+          await safeZeroStop();
+          await deviceCommand('HOME', 8000);
+          status = await waitForDevice(
+            (value) => value?.gc?.homed && !value?.gc?.busy && !value?.io?.busy,
+            60000,
+            text('HOME 逾時，請檢查感測器與滑軌。', 'HOME timed out. Check the sensors and rails.')
+          );
+          const cfg = status.gc.cfg;
+          state.homeX = Number.isFinite(Number(status.gc.x)) ? Number(status.gc.x) : Number(cfg[0]);
+          state.homeY = Number.isFinite(Number(status.gc.y)) ? Number(status.gc.y) : Number(cfg[1]);
+          state.travelX = 0; state.travelY = 0;
+          state.x = state.homeX; state.y = state.homeY;
+          await deviceCommand('XYEN 0', 3000);
+          await deviceCommand('DAC 255', 3000);
+          await deviceCommand('PWM 10', 3000);
+          await deviceCommand('LON', 3000);
+          state.laserOn = true;
+          state.step = 2;
+          setStatus(text('HOME 完成，已開啟 S10 弱光。使用同步向量將光點移到左下角零點。', 'HOME complete and S10 positioning light is on. Use synchronized vectors to move the dot to the lower-left zero.'));
+        } catch (error) {
+          await safeZeroStop(true);
+          setStatus(error?.message || String(error));
+        } finally {
+          state.busy = false;
+          renderStep();
+        }
+      }
+
+      async function jogZero(dx, dy) {
+        if (state.busy || state.step !== 2) return;
+        state.busy = true;
+        renderStep();
+        const moveX = quantizeMm(dx);
+        const moveY = quantizeMm(dy);
+        setStatus(text(`同步向量吋動：X ${moveX} mm、Y ${moveY} mm。`, `Synchronized vector jog: X ${moveX} mm, Y ${moveY} mm.`));
+        try {
+          assertZeroReady(await readDeviceStatus());
+          await deviceCommand(`LINE ${moveX} ${moveY} 600`, 5000);
+          await waitForDevice(
+            (value) => !value?.io?.busy && !value?.gc?.busy,
+            30000,
+            text('吋動逾時，已停止馬達並關閉弱光。', 'Jog timed out. The motor and positioning light were stopped.')
+          );
+          state.travelX = quantizeMm(state.travelX + moveX);
+          state.travelY = quantizeMm(state.travelY + moveY);
+          state.x = quantizeMm(state.homeX + state.travelX);
+          state.y = quantizeMm(state.homeY + state.travelY);
+          setStatus(text(`已移動 LINE ${moveX} ${moveY} 600；相對 HOME：X ${state.travelX.toFixed(3)}、Y ${state.travelY.toFixed(3)} mm。`, `Moved LINE ${moveX} ${moveY} 600; relative to HOME: X ${state.travelX.toFixed(3)}, Y ${state.travelY.toFixed(3)} mm.`));
+        } catch (error) {
+          await safeZeroStop(true);
+          state.step = 1; state.travelX = 0; state.travelY = 0;
+          setStatus(error?.message || String(error));
+        } finally {
+          state.busy = false;
+          renderStep();
+        }
+      }
+
+      async function saveZeroCalibration() {
+        state.busy = true;
+        renderStep();
+        setStatus(text('正在把量測結果寫入 SD /config.sys。', 'Writing the measured result to SD /config.sys.'));
+        try {
+          const width = quantizeMm(-state.travelX);
+          const height = quantizeMm(-state.travelY);
+          if (width < 10 || height < 10 || width > 1000 || height > 1000) {
+            throw new Error(text('零點必須位於 HOME 的左下方，X／Y 量測距離須各為 10–1000 mm。', 'Zero must be below-left of HOME, with X and Y travel each between 10 and 1000 mm.'));
+          }
+          let status = await readDeviceStatus();
+          assertZeroReady(status);
+          const saved = await deviceCommand(calibrationConfigCommand(width, height, status), 10000);
+          if (!saved?.gc?.cfg || Math.abs(Number(saved.gc.cfg[0]) - width) > .0125 || Math.abs(Number(saved.gc.cfg[1]) - height) > .0125) {
+            throw new Error(text('SD 校正值回讀驗證失敗，未完成校正。', 'SD calibration read-back verification failed.'));
+          }
+          await deviceCommand('LOFF', 3000);
+          state.laserOn = false;
+          setStatus(text('已儲存 /config.sys，正在以新尺寸重新 HOME。', 'Saved /config.sys. Homing again with the new dimensions.'));
+          await deviceCommand('HOME', 8000);
+          status = await waitForDevice(
+            (value) => value?.gc?.homed && !value?.gc?.busy && !value?.io?.busy,
+            60000,
+            text('設定已儲存，但返回 HOME 逾時；請檢查機器。', 'Settings were saved, but the return to HOME timed out. Check the machine.')
+          );
+          state.savedWidth = width; state.savedHeight = height;
+          state.x = 0; state.y = 0; state.step = 4; state.completed = true;
+          setStatus(text(`零點校正完成：X ${width.toFixed(3)} mm、Y ${height.toFixed(3)} mm 已儲存至 SD /config.sys。`, `Zero calibration complete: X ${width.toFixed(3)} mm and Y ${height.toFixed(3)} mm saved to SD /config.sys.`));
+        } catch (error) {
+          await safeZeroStop(true);
+          state.step = 1; state.travelX = 0; state.travelY = 0;
+          setStatus(error?.message || String(error));
+        } finally {
+          state.busy = false;
+          renderStep();
+        }
+      }
 
       function updateConnection() {
         const status = deviceStatus();
@@ -3722,50 +4157,51 @@
         }));
         byId('maintenance-flow-title').textContent = meta.title;
         byId('maintenance-step-label').textContent = `${text('步驟', 'Step')} ${state.step} / ${meta.total}`;
+        byId('maintenance-back').disabled = state.busy;
         updateConnection();
       }
 
       function zeroStep() {
         if (state.step === 1) return `
           <div class="maintenance-step">
-            <h3>${text('啟動定位弱光', 'Turn on the positioning laser')}</h3>
-            <p>${text('按下按鈕後以 S10 弱光顯示雷射位置。請勿直視光點。', 'Press the button to show the laser position at S10. Do not look directly at the beam.')}</p>
-            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-laser">${text('啟動弱光 S10', 'Turn on laser S10')}</button></div>
+            <h3>${text('HOME 並啟動定位弱光', 'Home and turn on positioning light')}</h3>
+            <p>${text('機器會先回到右上角 HOME，再以 DAC 255／PWM 10 開啟 S10 弱光。請勿直視光點。', 'The machine first homes to the upper-right corner, then turns on the S10 positioning light with DAC 255 / PWM 10. Do not look directly at the beam.')}</p>
+            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-laser" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在 HOME…', 'Homing…') : text('開始校正', 'Start calibration')}</button></div>
           </div>`;
         if (state.step === 2) return `
           <div class="maintenance-step">
             <h3>${text('將光點移至左下角', 'Move the dot to the lower-left corner')}</h3>
             <p>${text('選擇吋動距離，再使用方向鍵微調位置。', 'Choose a jog distance, then use the arrow controls to fine-tune the position.')}</p>
-            <div class="coordinate-strip"><div>X&nbsp; ${state.x.toFixed(1)} mm</div><div>Y&nbsp; ${state.y.toFixed(1)} mm</div></div>
+            <div class="coordinate-strip"><div>X&nbsp; ${state.x.toFixed(3)} mm</div><div>Y&nbsp; ${state.y.toFixed(3)} mm</div></div>
             <div class="jog-layout">
               <div class="jog-pad" aria-label="XY jog controls">
-                <button class="action-button" type="button" data-jog-y="1" aria-label="Y positive">↑</button>
-                <button class="action-button" type="button" data-jog-x="-1" aria-label="X negative">←</button>
+                <button class="action-button" type="button" data-jog-y="1" aria-label="Y positive" ${state.busy ? 'disabled' : ''}>↑</button>
+                <button class="action-button" type="button" data-jog-x="-1" aria-label="X negative" ${state.busy ? 'disabled' : ''}>←</button>
                 <button class="action-button" type="button" disabled aria-label="Current position">·</button>
-                <button class="action-button" type="button" data-jog-x="1" aria-label="X positive">→</button>
-                <button class="action-button" type="button" data-jog-y="-1" aria-label="Y negative">↓</button>
+                <button class="action-button" type="button" data-jog-x="1" aria-label="X positive" ${state.busy ? 'disabled' : ''}>→</button>
+                <button class="action-button" type="button" data-jog-y="-1" aria-label="Y negative" ${state.busy ? 'disabled' : ''}>↓</button>
               </div>
               <div>
                 <span class="field-label">${text('吋動距離', 'Jog distance')}</span>
                 <div class="segmented-control grid-cols-3">
-                  ${[.1, 1, 10].map((value) => `<button type="button" data-jog-step="${value}" aria-pressed="${state.jog === value}">${value} mm</button>`).join('')}
+                  ${[.1, 1, 10].map((value) => `<button type="button" data-jog-step="${value}" aria-pressed="${state.jog === value}" ${state.busy ? 'disabled' : ''}>${value} mm</button>`).join('')}
                 </div>
-                <button class="action-button primary mt-4 w-full" type="button" data-action="zero-positioned">${text('位置已對準', 'Position aligned')}</button>
+                <button class="action-button primary mt-4 w-full" type="button" data-action="zero-positioned" ${state.busy ? 'disabled' : ''}>${state.busy ? text('移動中…', 'Moving…') : text('位置已對準', 'Position aligned')}</button>
               </div>
             </div>
           </div>`;
         if (state.step === 3) return `
           <div class="maintenance-step">
             <h3>${text('設定目前位置為零點', 'Set the current position as zero')}</h3>
-            <p>${text('確認光點位於左下角適當位置。設定後目前座標將成為 X0、Y0。', 'Confirm the dot is correctly placed at the lower-left corner. The current position will become X0, Y0.')}</p>
-            <div class="maintenance-result">X ${state.x.toFixed(1)} mm&nbsp;&nbsp;·&nbsp;&nbsp;Y ${state.y.toFixed(1)} mm</div>
-            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-confirm">${text('設定零點', 'Set zero')}</button><button class="action-button" type="button" data-action="zero-back-jog">${text('返回微調', 'Back to jog')}</button></div>
+            <p>${text('將以 HOME 到目前位置的同步向量距離計算 X／Y 尺寸，並寫入 SD /config.sys。', 'The synchronized-vector distance from HOME to the current position becomes the X/Y dimensions and is written to SD /config.sys.')}</p>
+            <div class="maintenance-result">${text('量測尺寸', 'Measured size')}&nbsp;&nbsp;X ${quantizeMm(-state.travelX).toFixed(3)} mm&nbsp;&nbsp;·&nbsp;&nbsp;Y ${quantizeMm(-state.travelY).toFixed(3)} mm</div>
+            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-confirm" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在儲存…', 'Saving…') : text('儲存零點到 SD', 'Save zero to SD')}</button><button class="action-button" type="button" data-action="zero-back-jog" ${state.busy ? 'disabled' : ''}>${text('返回微調', 'Back to jog')}</button></div>
           </div>`;
         return `
           <div class="maintenance-step">
             <h3>${text('零點校正完成', 'Zero calibration complete')}</h3>
-            <p>${text('弱光已關閉，雷射頭將移回等待位置。', 'The positioning laser is off and the laser head will return to its waiting position.')}</p>
-            <div class="maintenance-result">X 0.0 mm&nbsp;&nbsp;·&nbsp;&nbsp;Y 0.0 mm</div>
+            <p>${text('弱光已關閉，設定已寫入 SD /config.sys，雷射頭已回到 HOME 等待位置。', 'The positioning light is off, settings are saved to SD /config.sys, and the laser head is back at HOME.')}</p>
+            <div class="maintenance-result">X ${state.savedWidth.toFixed(3)} mm&nbsp;&nbsp;·&nbsp;&nbsp;Y ${state.savedHeight.toFixed(3)} mm</div>
             <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="finish">${text('完成', 'Done')}</button></div>
           </div>`;
       }
@@ -3840,7 +4276,13 @@
       }
 
       function openFlow(flow) {
-        Object.assign(state, { flow, step: 1, jog: 1, x: 0, y: 0, power: 20, focusValue: '', calibrationStarted: false, completed: false, firmwareDownloaded: false });
+        Object.assign(state, {
+          flow, step: 1, jog: 1, x: 0, y: 0, power: 20,
+          focusValue: '', calibrationStarted: false, completed: false,
+          firmwareDownloaded: false, busy: false, laserOn: false,
+          homeX: 0, homeY: 0, travelX: 0, travelY: 0,
+          savedWidth: 0, savedHeight: 0
+        });
         byId('maintenance-menu').hidden = true;
         byId('maintenance-flow').hidden = false;
         setStatus(text('尚未執行任何機器指令。', 'No machine command has been executed.'));
@@ -3848,9 +4290,11 @@
       }
 
       function closeFlow() {
+        const stopZero = state.flow === 'zero' && (state.laserOn || (state.step > 1 && !state.completed));
         state.flow = null;
         byId('maintenance-flow').hidden = true;
         byId('maintenance-menu').hidden = false;
+        if (stopZero) safeZeroStop(true);
       }
 
       document.querySelectorAll('[data-maintenance-flow]').forEach((button) => button.addEventListener('click', () => openFlow(button.dataset.maintenanceFlow)));
@@ -3861,24 +4305,22 @@
           byId('maintenance-focus-power-value').textContent = `${state.power}%`;
         }
       });
-      byId('maintenance-step-body').addEventListener('click', (event) => {
+      byId('maintenance-step-body').addEventListener('click', async (event) => {
         const target = event.target.closest('button');
         if (!target || target.disabled) return;
         if (target.dataset.jogStep) { state.jog = Number(target.dataset.jogStep); renderStep(); return; }
-        if (target.dataset.jogX) state.x = Math.max(0, state.x + Number(target.dataset.jogX) * state.jog);
-        if (target.dataset.jogY) state.y = Math.max(0, state.y + Number(target.dataset.jogY) * state.jog);
         if (target.dataset.jogX || target.dataset.jogY) {
-          const machine = localStorage.getItem('cubiio2-project-machine') === 'A3' ? { width: 420, height: 297 } : { width: 297, height: 210 };
-          state.x = Math.min(machine.width, state.x); state.y = Math.min(machine.height, state.y);
-          setStatus(text(`介面預覽：吋動 ${state.jog} mm。移動指令待韌體對接。`, `UI preview: jog ${state.jog} mm. Motion command pending firmware integration.`));
-          renderStep(); return;
+          const dx = Number(target.dataset.jogX || 0) * state.jog;
+          const dy = Number(target.dataset.jogY || 0) * state.jog;
+          await jogZero(dx, dy);
+          return;
         }
         if (target.dataset.focusValue) { state.focusValue = target.dataset.focusValue; renderStep(); return; }
         switch (target.dataset.action) {
-          case 'zero-laser': state.step = 2; setStatus(text('S10 弱光控制介面已啟動；通訊指令待韌體對接。', 'S10 laser UI activated; the device command is pending firmware integration.')); break;
+          case 'zero-laser': await startZeroCalibration(); return;
           case 'zero-positioned': state.step = 3; break;
           case 'zero-back-jog': state.step = 2; break;
-          case 'zero-confirm': state.step = 4; state.x = 0; state.y = 0; setStatus(text('零點、關閉雷射與返回等待位置的指令待韌體對接。', 'Zeroing, laser-off, and return-to-wait commands are pending firmware integration.')); break;
+          case 'zero-confirm': await saveZeroCalibration(); return;
           case 'focus-paper': state.step = 2; break;
           case 'focus-start': state.step = 3; state.calibrationStarted = true; setStatus(text(`校正加工介面已啟動，雷射強度 ${state.power}%；加工指令待韌體對接。`, `Calibration engraving UI activated at ${state.power}%; the machining command is pending firmware integration.`)); break;
           case 'focus-selected': state.step = 4; break;
