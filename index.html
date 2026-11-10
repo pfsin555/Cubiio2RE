@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Cubiio2 single-page control application">
-  <title>Cubiio2 · 專案</title>
+  <title>Cubiio2 Studio</title>
 
   <script>
     (() => {
@@ -226,6 +226,13 @@
       .preview-well canvas { @apply mx-auto block max-h-72 max-w-full; image-rendering: pixelated; }
       .sd-list { @apply min-h-52; }
       .job-fields { @apply grid grid-cols-1 gap-3 sm:grid-cols-3; }
+      .bmp-option-row { @apply col-span-2 grid grid-cols-1 gap-2 sm:grid-cols-2; }
+      .bmp-check {
+        @apply flex min-h-10 items-center gap-2 rounded-md px-3 text-sm;
+        border: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .bmp-check input { width: 16px; height: 16px; accent-color: var(--accent); }
       .file-workspace-layout {
         @apply grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1.25fr)_minmax(310px,.75fr)] md:items-start;
       }
@@ -520,7 +527,7 @@
                 <canvas id="project-editor-canvas" aria-label="專案編輯畫布"></canvas>
               </div>
               <div class="project-stage-footer">
-                <span id="project-machine-size">A4 · 297 × 210 mm</span>
+                <span id="project-machine-size">A4 · 300 × 210 mm</span>
                 <span id="project-converted-badge" class="project-converted-badge" data-visible="false" data-i18n="projectConvertedPreview">轉檔預覽</span>
                 <span id="project-zoom-value">100%</span>
               </div>
@@ -545,8 +552,8 @@
               <section class="project-panel" data-project-panel="machine" hidden>
                 <label for="project-machine" class="field-label" data-i18n="projectMachine">選擇機器</label>
                 <select id="project-machine" class="form-control">
-                  <option value="A4">Cubiio2 A4 · 297 × 210 mm</option>
-                  <option value="A3">Cubiio2 A3 · 420 × 297 mm</option>
+                  <option value="A4">Cubiio2 A4 · 300 × 210 mm</option>
+                  <option value="A3">Cubiio2 A3 · 420 × 300 mm</option>
                 </select>
                 <p class="project-note" data-i18n="projectMachineHint">畫布固定為橫式；滑鼠滾輪或雙指可縮放，拖曳空白處可平移視角。</p>
                 <button id="project-reset-view" class="action-button mt-4 w-full" type="button" data-i18n="projectResetView">重設視角</button>
@@ -685,9 +692,9 @@
               <div class="panel-head upload-head">
                 <h2 id="upload-title" data-i18n="fileUpload">檔案上傳</h2>
                 <div class="flex w-full items-center gap-3 sm:w-auto sm:justify-end">
-                  <select id="c2-preview-machine" class="form-control !min-h-9 !w-auto" aria-label="預覽機型">
-                    <option value="A4">A4 · 297 × 210 mm</option>
-                    <option value="A3">A3 · 420 × 297 mm</option>
+                  <select id="c2-preview-machine" class="form-control !min-h-9 !w-auto" aria-label="裝置機型與雷射頭" disabled aria-readonly="true">
+                    <option value="A4">A4 · 等待裝置資料</option>
+                    <option value="A3">A3 · 等待裝置資料</option>
                   </select>
                   <span id="c2-file-state" class="file-alert" role="status" hidden></span>
                 </div>
@@ -708,13 +715,25 @@
 
                 <div class="file-operations">
                   <div class="upload-zone">
-                    <label for="c2-file" class="field-label" data-i18n="chooseFile">選擇 .bmp 或 .gcode</label>
-                    <input id="c2-file" type="file" accept=".bmp,.gcode,image/bmp,text/plain">
+                    <label for="c2-file" class="field-label" data-i18n="chooseFile">選擇 .bmp、.gcode、.nc 或 .txt</label>
+                    <input id="c2-file" type="file" accept=".bmp,.gcode,.nc,.txt,image/bmp,text/plain">
+                    <div class="mt-4">
+                      <label for="c2-upload-name" class="field-label">SD 卡檔名</label>
+                      <input id="c2-upload-name" class="form-control" type="text" maxlength="48" placeholder="example.bmp" disabled>
+                    </div>
                     <div id="c2-bmp-offset-fields" class="project-field-grid mt-4" hidden>
                       <div><label for="c2-bmp-offset-x" class="field-label" data-i18n="bmpOffsetX">X 偏移 / mm</label><input id="c2-bmp-offset-x" class="form-control" type="number" min="0" step="0.1" value="0"></div>
                       <div><label for="c2-bmp-offset-y" class="field-label" data-i18n="bmpOffsetY">Y 偏移 / mm</label><input id="c2-bmp-offset-y" class="form-control" type="number" min="0" step="0.1" value="0"></div>
+                      <div><label for="c2-bmp-mode" class="field-label">出光模式</label><select id="c2-bmp-mode" class="form-control"><option value="0">到達後停點出光</option><option value="1">不停下，邊走邊燒</option></select></div>
+                      <div><label for="c2-bmp-dwell" class="field-label">停點出光時間 / step clocks</label><input id="c2-bmp-dwell" class="form-control" type="number" min="1" max="1000000" step="1" value="4"></div>
+                      <div class="col-span-2"><label for="c2-bmp-gap" class="field-label">每列完成後停頓 / ms</label><input id="c2-bmp-gap" class="form-control" type="number" min="0" max="1000" step="0.1" value="1"></div>
+                      <div class="bmp-option-row">
+                        <label class="bmp-check" for="c2-bmp-snake"><input id="c2-bmp-snake" type="checkbox" checked><span>S-shape raster</span></label>
+                        <label class="bmp-check" for="c2-bmp-invert"><input id="c2-bmp-invert" type="checkbox"><span>顛倒黑白</span></label>
+                      </div>
+                      <p id="c2-bmp-scan-summary" class="field-help col-span-2">0.1 mm/pixel · 停點 4 clocks · 列停頓 1 ms · S-shape</p>
                     </div>
-                    <p id="c2-file-info" class="field-help">BMP ≤ 24 MiB；G-code ≤ 4 MiB、ASCII、每行 ≤ 256 字元。</p>
+                    <p id="c2-file-info" class="field-help">BMP ≤ 24 MiB；G-code ≤ 4 MiB，非 ASCII 註解會由 v1.69 略過。</p>
                   </div>
                   <div class="progress-track" aria-hidden="true"><div id="c2-upload-progress" class="progress-fill"></div></div>
                   <div class="button-row mt-4">
@@ -732,15 +751,17 @@
                     <p id="c2-sd-info" class="field-help">尚未讀取 SD 卡。</p>
 
                     <div class="job-fields mt-4">
-                      <div><label for="c2-material-height" class="field-label" data-i18n="materialHeight">材料高度 / mm</label><input id="c2-material-height" class="form-control" type="number" min="0" max="50" step="0.1" value="3"></div>
-                      <div><label for="c2-job-power" class="field-label" data-i18n="laserPower">雷射功率 / %</label><input id="c2-job-power" class="form-control" type="number" min="1" max="100" step="1" value="80"></div>
-                      <div><label for="c2-job-speed" class="field-label" data-i18n="jobSpeed">速度 / mm/min</label><input id="c2-job-speed" class="form-control" type="number" min="60" max="2400" step="1" value="600"></div>
+                      <div><label for="c2-material-height" class="field-label" data-i18n="materialHeight">材料高度 (-3～10 mm)</label><input id="c2-material-height" class="form-control" type="number" min="-3" max="10" step="0.5" value="0"></div>
+                      <div><label for="c2-job-power" class="field-label" data-i18n="laserPower">功率 (5～100%)</label><input id="c2-job-power" class="form-control" type="number" min="5" max="100" step="0.1" value="20"></div>
+                      <div><label for="c2-job-speed" class="field-label" data-i18n="jobSpeed">速度 (1～100%)</label><input id="c2-job-speed" class="form-control" type="number" min="1" max="100" step="0.1" value="100"></div>
                     </div>
-                    <p id="c2-job-note" class="field-help">工程韌體尚未定義這三項參數的加工指令；本版僅檢查並保存，G-code 仍使用檔案內的 F／S。</p>
+                    <p id="c2-job-note" class="field-help">v1.69 本次加工參數：RFF 100% = F6000；BMP 固定 0.1 mm/pixel，使用 1-bit 點陣灰階。</p>
                     <div class="button-row mt-4">
                       <button id="c2-prepare-job" class="action-button" type="button" disabled data-i18n="prepareJob">準備加工</button>
                       <button id="c2-check-file" class="action-button" type="button" disabled data-i18n="preflight">G-code 預檢</button>
-                      <button id="c2-run-file" class="action-button primary" type="button" disabled data-i18n="runWithFileParams">依檔案 F／S 執行</button>
+                      <button id="c2-run-file" class="action-button primary" type="button" disabled>開始加工</button>
+                      <button id="c2-pause" class="action-button" type="button" disabled>暫停 BMP</button>
+                      <button id="c2-resume" class="action-button" type="button" disabled>繼續 BMP</button>
                       <button id="c2-stop" class="action-button danger" type="button" disabled data-i18n="stop">停止</button>
                     </div>
                   </section>
@@ -893,7 +914,7 @@
           boxLight: '機內燈光',
           filterFan: '排煙風扇',
           fileUpload: '檔案上傳',
-          chooseFile: '選擇 .bmp 或 .gcode',
+          chooseFile: '選擇 .bmp、.gcode、.nc 或 .txt',
           bmpOffsetX: 'X 偏移 / mm',
           bmpOffsetY: 'Y 偏移 / mm',
           uploadToSd: '上傳至 SD',
@@ -903,12 +924,12 @@
           refresh: '重新整理',
           selectFile: '選擇檔案',
           sdPreviewEmpty: '選取 SD 檔案以查看資料',
-          materialHeight: '材料高度 / mm',
-          laserPower: '雷射功率 / %',
-          jobSpeed: '速度 / mm/min',
+          materialHeight: '材料高度 (-3～10 mm)',
+          laserPower: '功率 (5～100%)',
+          jobSpeed: '速度 (1～100%)',
           prepareJob: '準備加工',
           preflight: 'G-code 預檢',
-          runWithFileParams: '依檔案 F／S 執行',
+          runWithFileParams: '開始加工',
           stop: '停止',
           themeToDark: '切換深色模式',
           themeToLight: '切換淺色模式',
@@ -972,7 +993,7 @@
           boxLight: 'Enclosure light',
           filterFan: 'Exhaust fan',
           fileUpload: 'File upload',
-          chooseFile: 'Choose .bmp or .gcode',
+          chooseFile: 'Choose .bmp, .gcode, .nc, or .txt',
           bmpOffsetX: 'X offset / mm',
           bmpOffsetY: 'Y offset / mm',
           uploadToSd: 'Upload to SD',
@@ -982,12 +1003,12 @@
           refresh: 'Refresh',
           selectFile: 'Select a file',
           sdPreviewEmpty: 'Select an SD file to inspect it',
-          materialHeight: 'Material height / mm',
-          laserPower: 'Laser power / %',
-          jobSpeed: 'Speed / mm/min',
+          materialHeight: 'Material height (-3–10 mm)',
+          laserPower: 'Power (5–100%)',
+          jobSpeed: 'Speed (1–100%)',
           prepareJob: 'Prepare job',
           preflight: 'Preflight G-code',
-          runWithFileParams: 'Run with file F/S',
+          runWithFileParams: 'Start job',
           stop: 'Stop',
           themeToDark: 'Switch to dark mode',
           themeToLight: 'Switch to light mode',
@@ -1110,18 +1131,20 @@
       const FOCUS = 'a27b1006-6d7e-4d55-9f20-93fd3b246a10';
       const GCODE = 'a27b1007-6d7e-4d55-9f20-93fd3b246a10';
       const FILES = 'a27b1008-6d7e-4d55-9f20-93fd3b246a10';
+      const NET = 'a27b1009-6d7e-4d55-9f20-93fd3b246a10';
+      const FS = 'a27b100a-6d7e-4d55-9f20-93fd3b246a10';
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
       const MISSING = '\u2014';
       const DEVICE_MACHINES = {
-        A4: { name: 'A4', width: 297, height: 210 },
-        A3: { name: 'A3', width: 420, height: 297 }
+        A4: { name: 'A4', width: 300, height: 210 },
+        A3: { name: 'A3', width: 420, height: 300 }
       };
       const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
       const ble = {
         device: null, control: null, status: null, io: null, per: null,
-        job: null, focus: null, gc: null, files: null, info: null,
+        job: null, focus: null, gc: null, files: null, net: null, fs: null, info: null,
         at: -Infinity, tail: Promise.resolve(), epoch: 0, polling: false
       };
       const usb = { link: null, info: null, at: -Infinity, polling: false };
@@ -1145,6 +1168,7 @@
       const devicePreviewPointers = new Map();
       let devicePreviewInteraction = null;
       let devicePreviewPinch = null;
+      let deviceProfileKey = '';
 
       function selectedTransport() { return byId('c2-transport').value; }
       function previewMachine() { return DEVICE_MACHINES[byId('c2-preview-machine').value] || DEVICE_MACHINES.A4; }
@@ -1203,6 +1227,45 @@
       }
       function isGcodeName(name) { return /\.(gcode|nc|txt)$/i.test(name || ''); }
       function isBitmapName(name) { return /\.bmp$/i.test(name || ''); }
+      function textHex(value) {
+        return Array.from(encoder.encode(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      }
+      function hexText(value) {
+        if (typeof value !== 'string' || value.length % 2 || !/^[0-9a-f]*$/i.test(value)) throw new Error('裝置回傳無效的 UTF-8 路徑。');
+        const bytes = new Uint8Array(value.length / 2);
+        for (let index = 0; index < bytes.length; index += 1) bytes[index] = parseInt(value.slice(index * 2, index * 2 + 2), 16);
+        return decoder.decode(bytes);
+      }
+      function serialCommandTimeout(command) { return /^(?:WF_|FS_|FD_)/.test(command) ? 12000 : 2200; }
+      function syncDeviceProfile(status) {
+        const select = byId('c2-preview-machine');
+        if (!select) return;
+        const machineName = status?.model === 'PL-02B' ? 'A3' : status?.model === 'PL-02' ? 'A4' : null;
+        if (!machineName) {
+          const option = select.querySelector(`option[value="${select.value}"]`);
+          if (option) option.textContent = `${select.value} · 等待裝置資料`;
+          deviceProfileKey = '';
+          return;
+        }
+        const laserType = Number(status?.focus?.ee?.laser_type);
+        const laserName = laserType === 240 ? 'LC35' : laserType === 241 ? 'LC50' : '雷射頭未知';
+        const machine = DEVICE_MACHINES[machineName];
+        const key = `${status.uid}|${status.model}|${laserType}`;
+        for (const option of select.options) {
+          const item = DEVICE_MACHINES[option.value];
+          option.textContent = option.value === machineName
+            ? `${item.name} · ${status.model} · ${laserName}`
+            : `${item.name} · ${item.width} × ${item.height} mm`;
+        }
+        if (select.value !== machineName) {
+          select.value = machineName;
+          resetDevicePreviewView();
+        }
+        if (deviceProfileKey !== key) {
+          deviceProfileKey = key;
+          document.dispatchEvent(new CustomEvent('cubiio2-machine-change', { detail: machineName }));
+        }
+      }
       function formatDuration(seconds) {
         if (!Number.isFinite(Number(seconds)) || Number(seconds) < 0) return MISSING;
         const total = Math.ceil(Number(seconds));
@@ -1212,8 +1275,11 @@
 
       function validateStatus(raw) {
         if (raw?.viewVersion === 5) return raw;
-        if (raw?.protocol === 2 && raw.model === 'CUBIIO2-BUZZER-PROTOTYPE' && raw.chip === 'ESP32' && /^[0-9a-f]{12}$/i.test(raw.uid)) {
+        if (raw?.protocol === 2 && ['CUBIIO2-BUZZER-PROTOTYPE', 'PL-02', 'PL-02B', 'UNKNOWN'].includes(raw.model) && raw.chip === 'ESP32' && /^[0-9a-f]{12}$/i.test(raw.uid) && ['buzzer', 'fault', 'locked', 'ble'].every((key) => typeof raw[key] === 'boolean')) {
           const io = [5, 6].includes(raw.io?.p) ? raw.io : null;
+          if (io && (!['ds', 'do', 'ps', 'po'].every((key) => Number.isInteger(io[key]) && io[key] >= 0 && io[key] <= 255) || typeof io.gate !== 'boolean' || ![0, 1].includes(io.xy))) {
+            throw new Error('Cubiio2 I/O 狀態格式錯誤。');
+          }
           return { ...raw, viewVersion: 5, modern: Boolean(io), io, error: raw.error || '' };
         }
         if (raw?.p === 4 && /^[0-9a-f]{12}$/i.test(raw.uid) && typeof raw.lock === 'boolean') {
@@ -1234,6 +1300,7 @@
         const link = via === 'ble' ? ble : usb;
         link.info = status;
         link.at = performance.now();
+        syncDeviceProfile(status);
         renderDevice();
         return status;
       }
@@ -1246,7 +1313,13 @@
           this.readerTask = null;
           this.running = false;
           this.pending = new Map();
+          this.bootLines = [];
           this.tail = Promise.resolve();
+          this.lastRxAt = -Infinity;
+          this.lastFrameId = null;
+          this.booting = false;
+          this.bootReady = false;
+          this.recoveries = 0;
         }
         async open(port) {
           this.port = port;
@@ -1257,22 +1330,63 @@
           this.readerTask = this.readLoop();
         }
         async readLoop() {
-          const textDecoder = new TextDecoder();
+          let textDecoder = new TextDecoder();
           let text = '';
           let lost = false;
           try {
             while (this.running) {
-              const { value, done } = await this.reader.read();
+              let packet;
+              try { packet = await this.reader.read(); }
+              catch (error) {
+                if (!this.running) break;
+                const detail = (error?.name || '') + ' ' + (error?.message || '');
+                if (this.port?.readable && /BufferOverrun|FramingError|ParityError|buffer overrun/i.test(detail)) {
+                  this.recoveries += 1;
+                  text = '';
+                  textDecoder = new TextDecoder();
+                  this.rejectAll(new Error('USB 接收資料遺失；連線已恢復，請重試該操作。'));
+                  this.reader.releaseLock();
+                  this.reader = null;
+                  await delay(30);
+                  if (!this.running) break;
+                  this.reader = this.port.readable.getReader();
+                  continue;
+                }
+                throw error;
+              }
+              const { value, done } = packet;
               if (done) break;
+              if (value?.length) this.lastRxAt = performance.now();
               text += textDecoder.decode(value, { stream: true });
-              if (text.length > 16384) throw new Error('USB 資料超過緩衝上限。');
               let end;
               while ((end = text.indexOf('\n')) >= 0) {
+                if (end > 16384) throw new Error('USB 回覆資料超過上限。');
                 const line = text.slice(0, end).trim();
                 text = text.slice(end + 1);
                 if (!line) continue;
                 let raw;
-                try { raw = JSON.parse(line); } catch (_) { continue; }
+                try { raw = JSON.parse(line); }
+                catch (_) {
+                  const entry = line.slice(0, 180);
+                  this.bootLines.push(entry);
+                  if (this.bootLines.length > 6) this.bootLines.shift();
+                  if (line.includes('#BOOT COMMAND_READY')) { this.booting = false; this.bootReady = true; }
+                  else if (/#BOOT (?:SETUP|CONTROL_BEGIN)/.test(line)) { this.booting = true; this.bootReady = false; }
+                  if (line.startsWith('{')) {
+                    const match = /"id"\s*:\s*(\d+)/.exec(line);
+                    const id = match ? Number(match[1]) : null;
+                    const waiting = this.pending.get(id);
+                    if (waiting) {
+                      this.pending.delete(id);
+                      clearTimeout(waiting.timer);
+                      waiting.reject(new Error('USB 回覆 JSON 不完整或格式錯誤：' + waiting.command));
+                    }
+                  }
+                  continue;
+                }
+                if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+                if (typeof raw.id === 'string' && /^\d+$/.test(raw.id)) raw.id = Number(raw.id);
+                this.lastFrameId = Number.isInteger(raw.id) ? raw.id : null;
                 const waiting = this.pending.get(raw.id);
                 if (waiting) {
                   this.pending.delete(raw.id);
@@ -1280,6 +1394,7 @@
                   waiting.resolve(raw);
                 }
               }
+              if (text.length > 16384) throw new Error('USB 回覆資料超過上限。');
             }
             if (this.running) throw new Error('USB 已中斷。');
           } catch (error) {
@@ -1300,7 +1415,13 @@
             renderDevice();
           }
         }
-        request(command, timeout = 2200) {
+        async waitForReady() {
+          await delay(150);
+          const deadline = performance.now() + 15000;
+          while (this.running && this.booting && !this.bootReady && performance.now() < deadline) await delay(50);
+          if (this.booting && !this.bootReady) throw new Error('機器尚未完成開機；USB 保持開啟，請稍後重試。');
+        }
+        request(command, timeout = serialCommandTimeout(command)) {
           const job = this.tail.catch(() => {}).then(() => this.requestNow(command, timeout));
           this.tail = job.catch(() => {});
           return job;
@@ -1308,15 +1429,17 @@
         async requestNow(command, timeout) {
           if (!this.running || !this.port?.writable) throw new Error('USB 尚未連線。');
           const id = nextId();
+          const started = performance.now();
           const parts = command.split(' ');
           const line = parts.shift() + ' ' + id + (parts.length ? ' ' + parts.join(' ') : '') + '\n';
           let waiting;
           const reply = new Promise((resolve, reject) => {
             waiting = {
-              resolve, reject,
+              command, resolve, reject,
               timer: setTimeout(() => {
                 this.pending.delete(id);
-                reject(new Error('USB 回應逾時：' + command));
+                const detail = this.lastRxAt >= started ? '；期間仍有收到資料，最後回覆 ID=' + String(this.lastFrameId ?? '無') : '';
+                reject(new Error('USB 回應逾時：' + command + '（等待 ID ' + id + detail + '）'));
               }, timeout)
             };
             this.pending.set(id, waiting);
@@ -1350,7 +1473,7 @@
 
       function clearBle() {
         ble.epoch += 1;
-        for (const key of ['control', 'status', 'io', 'per', 'job', 'focus', 'gc', 'files']) ble[key] = null;
+        for (const key of ['control', 'status', 'io', 'per', 'job', 'focus', 'gc', 'files', 'net', 'fs']) ble[key] = null;
         ble.info = null;
         ble.at = -Infinity;
         renderDevice();
@@ -1367,7 +1490,7 @@
                 timer = setTimeout(() => {
                   if (epoch === ble.epoch) ble.device?.gatt.disconnect();
                   reject(new Error('Bluetooth 操作逾時，已中斷連線。'));
-                }, 4500);
+                }, 10000);
               })
             ]);
           } finally { clearTimeout(timer); }
@@ -1379,7 +1502,7 @@
         for (let retry = 0; retry < 4; retry += 1) {
           const base = JSON.parse(decoder.decode(await ble.status.readValue()));
           let mismatch = false;
-          for (const [key, characteristic] of [['io', ble.io], ['per', ble.per], ['job', ble.job], ['focus', ble.focus], ['gc', ble.gc]]) {
+          for (const [key, characteristic] of [['io', ble.io], ['per', ble.per], ['job', ble.job], ['focus', ble.focus], ['gc', ble.gc], ['net', ble.net], ['fs', ble.fs]]) {
             if (!characteristic) continue;
             const page = JSON.parse(decoder.decode(await characteristic.readValue()));
             if (page.id !== base.id) { mismatch = true; break; }
@@ -1422,7 +1545,9 @@
         }
         if (via === 'ble') return bleRequest(command);
         if (!usb.link) throw new Error('USB 尚未連線。');
-        const status = accept(await usb.link.request(command, timeout), 'usb');
+        const raw = await usb.link.request(command, timeout);
+        if (raw?.type === 'error') throw new Error(raw.error || 'USB_REPLY_ERROR');
+        const status = accept(raw, 'usb');
         if (status.error) throw new Error(status.error);
         return status;
       }
@@ -1451,11 +1576,13 @@
           const epoch = ++ble.epoch;
           const server = await device.gatt.connect();
           const service = await server.getPrimaryService(SERVICE);
-          ble.control = await service.getCharacteristic(CONTROL);
-          ble.status = await service.getCharacteristic(STATUS);
-          for (const [key, uuid] of [['io', IO], ['per', PER], ['job', JOB], ['focus', FOCUS], ['gc', GCODE], ['files', FILES]]) {
-            try { ble[key] = await service.getCharacteristic(uuid); } catch (_) { ble[key] = null; }
+          const characteristics = await service.getCharacteristics();
+          if (epoch !== ble.epoch || !device.gatt.connected) throw new Error('Bluetooth 已中斷。');
+          const byUuid = new Map(characteristics.map((characteristic) => [characteristic.uuid.toLowerCase(), characteristic]));
+          for (const [key, uuid] of Object.entries({ control: CONTROL, status: STATUS, io: IO, per: PER, job: JOB, focus: FOCUS, gc: GCODE, files: FILES, net: NET, fs: FS })) {
+            ble[key] = byUuid.get(uuid) || null;
           }
+          if (!ble.control || !ble.status) throw new Error('找不到 Cubiio2 Bluetooth 控制與狀態特徵。');
           byId('c2-transport').value = 'ble';
           await readBle(epoch);
           byId('c2-connection-dialog').close();
@@ -1476,14 +1603,19 @@
           usb.link = link;
           await link.open(port);
           let lastError;
+          try { await link.waitForReady(); } catch (error) { lastError = error; }
           for (let retry = 0; retry < 5; retry += 1) {
             try { await request('HELLO', 'usb'); lastError = null; break; }
             catch (error) { lastError = error; await delay(250); }
           }
-          if (lastError) throw lastError;
           byId('c2-transport').value = 'usb';
           byId('c2-connection-dialog').close();
-          setMessage('USB 已連線。');
+          if (lastError) {
+            const detail = link.bootLines.length
+              ? '；啟動訊息：' + link.bootLines.join(' / ')
+              : '；未收到有效回覆，請確認韌體為 v1.69 且 USB baud 為 512000。';
+            setMessage('序列埠已開啟，韌體握手失敗：' + errText(lastError) + detail, true);
+          } else setMessage('USB 已連線，韌體 ' + (usb.info?.fw || 'v1.69') + '。');
         } catch (error) {
           await link?.close().catch(() => {});
           usb.link = null;
@@ -1495,7 +1627,6 @@
         if (busy || uploadRunning) return;
         busy = true; renderDevice();
         try {
-          if (usbReady()) await request(usb.info.modern ? 'ALL_OFF' : 'STOP', 'usb').catch(() => {});
           await usb.link?.close();
         } catch (error) { setMessage(errText(error), true); }
         finally { usb.link = null; usb.info = null; busy = false; renderDevice(); }
@@ -1572,13 +1703,17 @@
       }
       function validateGcode(bytes) {
         if (!bytes.length || bytes.length > 4194304) throw new Error('G-code 須為 1 byte 至 4 MiB。');
-        let lineLength = 0;
+        let lineLength = 0, commentDepth = 0, lineComment = false;
         for (const value of bytes) {
-          if (value === 10) { lineLength = 0; continue; }
+          if (value === 10) { lineLength = 0; commentDepth = 0; lineComment = false; continue; }
           if (value === 13) continue;
-          if (value > 126 || (value < 32 && value !== 9)) throw new Error('G-code 須為 ASCII 純文字，不可含 BOM 或非 ASCII 字元。');
+          if (lineComment) continue;
+          if (value === 59 && commentDepth === 0) { lineComment = true; continue; }
+          if (value === 40) { commentDepth += 1; continue; }
+          if (value === 41 && commentDepth > 0) { commentDepth -= 1; continue; }
+          if (commentDepth > 0 || value > 126 || (value < 32 && value !== 9)) continue;
           lineLength += 1;
-          if (lineLength > 256) throw new Error('G-code 有超過 256 字元的行。');
+          if (lineLength > 256) throw new Error('G-code 有超過 256 個有效 ASCII 字元的指令行。');
         }
       }
 
@@ -1852,9 +1987,36 @@
         return output;
       }
 
+      function bitmapScanSettings() {
+        const mode = Number(byId('c2-bmp-mode').value);
+        const dwell = Number(byId('c2-bmp-dwell').value);
+        const gapMs = Number(byId('c2-bmp-gap').value);
+        if (![0, 1].includes(mode)) throw new Error('BMP 出光模式無效。');
+        if (!Number.isSafeInteger(dwell) || dwell < 1 || dwell > 1000000) throw new Error('停點出光時間須為 1～1,000,000 step clocks。');
+        if (!Number.isFinite(gapMs) || gapMs < 0 || gapMs > 1000) throw new Error('每列停頓須為 0～1000 ms。');
+        return {
+          mode, dwell, gapMs, gapUs: Math.round(gapMs * 1000),
+          snake: Number(byId('c2-bmp-snake').checked),
+          invert: Number(byId('c2-bmp-invert').checked)
+        };
+      }
+
+      function renderBitmapScanSummary() {
+        try {
+          const settings = bitmapScanSettings();
+          const speed = Number(byId('c2-job-speed').value);
+          const hz = Number.isFinite(speed) ? Math.max(1, Math.round(80 * speed)) : 1;
+          const exposure = (settings.mode ? 8 : settings.dwell) / hz * 1000;
+          byId('c2-bmp-scan-summary').textContent = `0.1 mm/pixel · ${settings.mode ? '連續移動' : '停點出光'} ${exposure.toFixed(3)} ms · 列停頓 ${settings.gapMs} ms · ${settings.snake ? 'S-shape' : '單向'}${settings.invert ? ' · 顛倒黑白' : ''}`;
+        } catch (error) {
+          byId('c2-bmp-scan-summary').textContent = errText(error);
+        }
+      }
+
       function updateBitmapOffsetLimits() {
         const fields = byId('c2-bmp-offset-fields');
-        fields.hidden = localType !== 'bmp';
+        fields.hidden = localType !== 'bmp' && !isBitmapName(byId('c2-sd-files').value);
+        renderBitmapScanSummary();
         if (localType !== 'bmp' || !localMeta) return;
         const machine = previewMachine();
         byId('c2-bmp-offset-x').max = Math.max(0, machine.width - localMeta.width / localMeta.pxPerMmX).toFixed(1);
@@ -1970,7 +2132,8 @@
         await Promise.allSettled([usb.link?.tail, ble.tail]);
         if (info()?.job?.up !== 2) throw new Error('檔案上傳需要 v1.0 以上韌體。');
         if (uploadCancelled) throw new Error('已取消上傳。');
-        const begin = await uploadRequest('UP_BEGIN ' + bytes.length + ' ' + crc32(bytes) + (name ? ' ' + name : ''), via);
+        if (!safeSdName(name)) throw new Error('SD 檔名格式不正確。');
+        const begin = await uploadRequest('UP_BEGIN ' + bytes.length + ' ' + crc32(bytes) + ' @' + textHex('/' + name), via);
         if (begin.received !== 0 || begin.up !== 2) throw new Error('裝置未建立新的上傳工作。');
         let statusAt = performance.now();
         for (let offset = 0; offset < bytes.length;) {
@@ -2029,13 +2192,30 @@
         const entries = [];
         try {
           if (!info()?.job?.sd) await mountSd();
-          for (let index = 0; index <= 10000; index += 1) {
-            const response = await request('SD_LIST ' + index);
-            const file = response.files;
-            if (!file || file.id !== response.id) throw new Error('SD 檔案清單回覆無效。');
-            if (file.end) break;
-            if (safeSdName(file.name)) entries.push({ name: file.name, size: Number(file.size) || 0 });
-            if (index === 10000) throw new Error('SD 檔案數超出清單上限。');
+          if (info()?.fs || selectedTransport() === 'usb') {
+            await request('FS_INFO');
+            for (let index = 0; index <= 10000; index += 1) {
+              const response = await request('FS_DIR ' + textHex('/') + ' ' + index);
+              const file = response.fs;
+              if (!file || file.id !== response.id) throw new Error('SD 目錄回覆無效。');
+              if (file.end) break;
+              const path = hexText(file.path);
+              const name = path.split('/').pop();
+              if (!file.dir && safeSdName(name)) entries.push({ name, size: Number(file.size) || 0 });
+              if (index === 10000) throw new Error('SD 檔案數超出清單上限。');
+            }
+          } else {
+            for (let index = 0; index <= 10000; index += 1) {
+              const response = await request('SD_LIST ' + index);
+              const file = response.files;
+              if (!file || file.id !== response.id) throw new Error('SD 檔案清單回覆無效。');
+              if (file.end) break;
+              if (safeSdName(file.name)) entries.push({ name: file.name, size: Number(file.size) || 0 });
+              if (index === 10000) throw new Error('SD 檔案數超出清單上限。');
+            }
+            if (info()?.job?.file && !entries.some((entry) => entry.name === 'work.bmp')) {
+              entries.push({ name: 'work.bmp', size: Number(info().job.size) || 0 });
+            }
           }
           sdEntries = entries;
           for (const [name, preview] of sdPreviewCache) {
@@ -2063,11 +2243,12 @@
       async function uploadSelectedFile() {
         if (!localBytes || !localType || uploadRunning) return;
         const via = selectedTransport();
-        const remoteName = localType === 'bmp' ? '' : localUploadName;
-        if (localType === 'gcode' && !safeSdName(remoteName)) {
-          setFileAlert('G-code SD 檔名格式不正確。');
+        const remoteName = byId('c2-upload-name').value.trim();
+        if (!safeSdName(remoteName) || (localType === 'bmp' && !isBitmapName(remoteName)) || (localType === 'gcode' && !isGcodeName(remoteName))) {
+          setFileAlert('SD 檔名須為 4–48 字元，並保留正確的 BMP／G-code 副檔名。');
           return;
         }
+        localUploadName = remoteName;
         uploadRunning = true; uploadCancelled = false; renderDevice();
         try {
           const uploadBytes = localType === 'bmp' ? bitmapBytesWithOffset(localBytes, validateBitmapOffset()) : localBytes;
@@ -2075,7 +2256,7 @@
             byId('c2-upload-progress').style.width = (done / total * 100).toFixed(1) + '%';
             byId('c2-file-info').textContent = '已傳送 ' + done.toLocaleString() + ' / ' + total.toLocaleString() + ' bytes';
           });
-          const storedName = localType === 'bmp' ? 'work.bmp' : remoteName;
+          const storedName = remoteName;
           const preview = localPreviewModel();
           let previewSaved = false;
           if (preview) {
@@ -2123,12 +2304,16 @@
         else setFileAlert();
       }
       function readJobSettings() {
+        const defaults = { height: 0, power: 20, speed: 100 };
+        let saved = {};
         try {
-          const saved = JSON.parse(localStorage.getItem('cubiio2-job-settings') || '{}');
-          if (saved.height != null) byId('c2-material-height').value = saved.height;
-          if (saved.power != null) byId('c2-job-power').value = saved.power;
-          if (saved.speed != null) byId('c2-job-speed').value = saved.speed;
+          saved = JSON.parse(localStorage.getItem('cubiio2-job-settings') || '{}');
         } catch (_) {}
+        if (saved.schema !== 2) saved = {};
+        const height = Number(saved.height), power = Number(saved.power), speed = Number(saved.speed);
+        byId('c2-material-height').value = Number.isFinite(height) && height >= -3 && height <= 10 && Math.abs(height * 2 - Math.round(height * 2)) < 1e-8 ? height : defaults.height;
+        byId('c2-job-power').value = Number.isFinite(power) && power >= 5 && power <= 100 ? power : defaults.power;
+        byId('c2-job-speed').value = Number.isFinite(speed) && speed >= 1 && speed <= 100 ? speed : defaults.speed;
       }
       function validateJobSettings() {
         const values = {
@@ -2136,9 +2321,11 @@
           power: Number(byId('c2-job-power').value),
           speed: Number(byId('c2-job-speed').value)
         };
-        if (!Number.isFinite(values.height) || values.height < 0 || values.height > 50) throw new Error('材料高度須為 0–50 mm。');
-        if (!Number.isFinite(values.power) || values.power < 1 || values.power > 100) throw new Error('雷射功率須為 1–100%。');
-        if (!Number.isFinite(values.speed) || values.speed < 60 || values.speed > 2400) throw new Error('速度須為 60–2400 mm/min。');
+        if (!Number.isFinite(values.height) || values.height < -3 || values.height > 10 || Math.abs(values.height * 2 - Math.round(values.height * 2)) > 1e-8) {
+          throw new Error('RHH 高度須為 -3～10 mm，並以 0.5 mm 為級距。');
+        }
+        if (!Number.isFinite(values.power) || values.power < 5 || values.power > 100) throw new Error('功率須為 5～100%。');
+        if (!Number.isFinite(values.speed) || values.speed < 1 || values.speed > 100) throw new Error('速度須為 1～100%。');
         return values;
       }
       function prepareJob() {
@@ -2146,9 +2333,10 @@
           const entry = selectedSdEntry();
           if (!entry) throw new Error('請先選擇 SD 檔案。');
           const settings = validateJobSettings();
-          localStorage.setItem('cubiio2-job-settings', JSON.stringify(settings));
+          if (isBitmapName(entry.name)) bitmapScanSettings();
+          localStorage.setItem('cubiio2-job-settings', JSON.stringify({ schema: 2, ...settings }));
           jobPrepared = true;
-          setMessage('已保存加工設定：高度 ' + settings.height + ' mm、功率 ' + settings.power + '%、速度 ' + settings.speed + ' mm/min。這三項尚未送往韌體。');
+          setMessage('加工參數已就緒：RHH ' + settings.height + ' mm、RPP ' + settings.power + '%、RFF ' + settings.speed + '%；開始加工時會隨 GRUN／ENGRAVE 一併送出。');
         } catch (error) { jobPrepared = false; setMessage(errText(error), true); }
         renderDevice();
       }
@@ -2157,6 +2345,7 @@
         const bleOn = bleReady();
         const usbOn = Boolean(usb.link?.running);
         const status = info();
+        syncDeviceProfile(status);
         const available = fresh();
         const canControl = available && !busy && !uploadRunning && !status?.locked;
         const peripheral = status?.per;
@@ -2179,27 +2368,45 @@
 
         const lightOn = Boolean(peripheral?.box);
         const fanOn = Boolean(peripheral?.fan);
-        byId('c2-light-toggle').disabled = !canControl || !peripheralValid || !status?.io?.mcp;
+        byId('c2-light-toggle').disabled = !available || busy || !peripheralValid || !status?.io?.mcp;
         byId('c2-fan-toggle').disabled = byId('c2-light-toggle').disabled;
         byId('c2-light-toggle').setAttribute('aria-pressed', String(lightOn));
         byId('c2-fan-toggle').setAttribute('aria-pressed', String(fanOn));
 
         byId('c2-file').disabled = busy || uploadRunning;
+        byId('c2-upload-name').disabled = busy || uploadRunning || !localBytes;
         let bitmapOffsetReady = true;
         if (localType === 'bmp') {
           try { validateBitmapOffset(); } catch (_) { bitmapOffsetReady = false; }
         }
-        byId('c2-upload').disabled = !canControl || !localBytes || info()?.job?.up !== 2 || !bitmapOffsetReady || (localType === 'gcode' && !safeSdName(localUploadName)) || Boolean(status?.io?.gate);
+        const uploadName = byId('c2-upload-name').value.trim();
+        const uploadNameReady = safeSdName(uploadName) && (localType === 'bmp' ? isBitmapName(uploadName) : localType === 'gcode' ? isGcodeName(uploadName) : false);
+        byId('c2-upload').disabled = !canControl || !localBytes || info()?.job?.up !== 2 || !bitmapOffsetReady || !uploadNameReady || Boolean(status?.io?.gate);
         byId('c2-cancel-upload').disabled = !uploadRunning;
         byId('c2-refresh-sd').disabled = !canControl || sdListing;
         byId('c2-sd-files').disabled = !canControl || sdListing || !sdEntries.length;
 
         const entry = selectedSdEntry();
+        byId('c2-bmp-offset-fields').hidden = localType !== 'bmp' && !isBitmapName(entry?.name);
         const gcodeReady = Boolean(entry && isGcodeName(entry.name) && status?.gc?.p === 9 && canControl);
+        const bitmapReady = Boolean(entry && isBitmapName(entry.name) && status?.job?.rev >= 4 && canControl);
+        const machineBusy = Boolean(status?.job?.busy || status?.gc?.busy || status?.focus?.busy || status?.io?.busy);
+        const bitmapBusy = Boolean(status?.job?.busy), bitmapPaused = Boolean(status?.job?.paused);
         byId('c2-prepare-job').disabled = !entry || !canControl;
         byId('c2-check-file').disabled = !gcodeReady || !status?.gc?.known || !status?.gc?.homed;
-        byId('c2-run-file').disabled = !gcodeReady || !jobPrepared || !status?.gc?.known || !status?.gc?.homed;
-        byId('c2-stop').disabled = !available || status?.gc?.p !== 9;
+        byId('c2-run-file').disabled = !(gcodeReady || bitmapReady) || !jobPrepared || machineBusy;
+        byId('c2-run-file').textContent = bitmapReady ? '開始 BMP 灰階加工' : '開始 G-code 加工';
+        byId('c2-bmp-offset-x').disabled = bitmapBusy;
+        byId('c2-bmp-offset-y').disabled = bitmapBusy;
+        byId('c2-bmp-mode').disabled = bitmapBusy;
+        byId('c2-bmp-snake').disabled = bitmapBusy;
+        byId('c2-bmp-invert').disabled = bitmapBusy;
+        byId('c2-bmp-dwell').disabled = Number(byId('c2-bmp-mode').value) === 1 || (bitmapBusy && !bitmapPaused);
+        byId('c2-bmp-gap').disabled = bitmapBusy && !bitmapPaused;
+        renderBitmapScanSummary();
+        byId('c2-pause').disabled = !canControl || !status?.job?.busy || status?.job?.paused;
+        byId('c2-resume').disabled = !canControl || !status?.job?.busy || !status?.job?.paused || Boolean(status?.sys?.door_paused);
+        byId('c2-stop').disabled = !available || !machineBusy;
         document.dispatchEvent(new CustomEvent('cubiio2-device-status', {
           detail: { connected, usb: usbOn, ble: bleOn, transport: selectedTransport(), ready: available }
         }));
@@ -2289,22 +2496,30 @@
       for (const id of ['c2-bmp-offset-x', 'c2-bmp-offset-y']) {
         byId(id).addEventListener('input', () => { renderLocalPreview(); renderDevice(); });
       }
-      byId('c2-preview-machine').addEventListener('change', () => {
-        try { localStorage.setItem('cubiio2-project-machine', byId('c2-preview-machine').value); } catch (_) {}
-        resetDevicePreviewView();
-        document.dispatchEvent(new CustomEvent('cubiio2-machine-change', { detail: byId('c2-preview-machine').value }));
-      });
+      for (const id of ['c2-bmp-mode', 'c2-bmp-dwell', 'c2-bmp-gap', 'c2-bmp-snake', 'c2-bmp-invert']) {
+        byId(id).addEventListener('input', () => {
+          jobPrepared = false;
+          renderBitmapScanSummary();
+          renderDevice();
+        });
+      }
       document.addEventListener('cubiio2-machine-change', (event) => {
+        if (['PL-02', 'PL-02B'].includes(info()?.model)) return;
         if (!DEVICE_MACHINES[event.detail] || byId('c2-preview-machine').value === event.detail) return;
         byId('c2-preview-machine').value = event.detail;
         resetDevicePreviewView();
       });
       byId('c2-upload').addEventListener('click', uploadSelectedFile);
+      byId('c2-upload-name').addEventListener('input', () => {
+        localUploadName = byId('c2-upload-name').value.trim();
+        renderDevice();
+      });
       byId('c2-cancel-upload').addEventListener('click', () => { uploadCancelled = true; });
       byId('c2-refresh-sd').addEventListener('click', () => listSd());
       byId('c2-sd-files').addEventListener('change', () => {
         activePreviewSource = 'sd';
         jobPrepared = false;
+        updateBitmapOffsetLimits();
         renderSdPreview();
         renderDevice();
       });
@@ -2319,20 +2534,44 @@
       });
       byId('c2-run-file').addEventListener('click', async () => {
         const entry = selectedSdEntry();
-        if (!entry || !isGcodeName(entry.name)) return;
+        if (!entry) return;
         try {
-          validateJobSettings();
-          await send('GRUN ' + entry.name);
-          setMessage('已執行 SD /' + entry.name + '；目前韌體依 G-code 內的 F／S，加工設定尚未傳送。');
+          const settings = validateJobSettings();
+          if (isGcodeName(entry.name)) {
+            await send(`GRUN ${settings.height} ${settings.power} ${settings.speed} ${entry.name}`);
+            setMessage(`已受理 GRUN：${entry.name} · RHH ${settings.height} · RPP ${settings.power}% · RFF ${settings.speed}%。`);
+          } else if (isBitmapName(entry.name)) {
+            const selected = await request('BSELECT ' + textHex('/' + entry.name));
+            const grayMode = Number(selected?.job?.bits) === 8 ? 2 : 0;
+            const scan = bitmapScanSettings();
+            const x = Number(byId('c2-bmp-offset-x').value);
+            const y = Number(byId('c2-bmp-offset-y').value);
+            if (![x, y].every((value) => Number.isFinite(value) && value >= 0)) throw new Error('BMP X／Y 偏移須為 0 以上的有效數值。');
+            await send(`ENGRAVE ${settings.height} ${settings.power} ${settings.speed} @${textHex('/' + entry.name)} ${x} ${y} 8 ${scan.dwell} ${scan.mode} ${scan.snake} ${scan.invert} 255 ${scan.gapUs} ${grayMode}`);
+            setMessage(`已受理 ENGRAVE：${entry.name} · 0.1 mm/pixel · RHH ${settings.height} · RPP ${settings.power}% · RFF ${settings.speed}%。`);
+          }
         } catch (error) { setMessage(errText(error), true); }
       });
-      byId('c2-stop').addEventListener('click', () => send('GSTOP').catch(() => {}));
+      byId('c2-pause').addEventListener('click', () => send('RPAUSE').catch(() => {}));
+      byId('c2-resume').addEventListener('click', async () => {
+        try {
+          const scan = bitmapScanSettings();
+          await send(`RSET 255 ${scan.dwell} ${scan.gapUs}`);
+          await send('RRESUME');
+        } catch (_) {}
+      });
+      byId('c2-stop').addEventListener('click', () => {
+        const status = info();
+        const command = status?.job?.busy ? 'RSTOP' : status?.focus?.busy ? 'FSTOP' : 'GSTOP';
+        send(command).catch(() => {});
+      });
 
       byId('c2-file').addEventListener('change', async () => {
         activePreviewSource = 'local';
         localBytes = null; localMeta = null; localType = null; localUploadName = ''; jobPrepared = false;
+        byId('c2-upload-name').value = '';
         setFileAlert();
-        byId('c2-file-info').textContent = 'BMP ≤ 24 MiB；G-code ≤ 4 MiB、ASCII、每行 ≤ 256 字元。';
+        byId('c2-file-info').textContent = 'BMP ≤ 24 MiB；G-code ≤ 4 MiB，非 ASCII 註解會由 v1.69 略過。';
         byId('c2-upload-progress').style.width = '0%';
         const file = byId('c2-file').files[0];
         if (!file) { renderLocalPreview(); renderDevice(); return; }
@@ -2340,18 +2579,19 @@
           const bytes = new Uint8Array(await file.arrayBuffer());
           if (/\.bmp$/i.test(file.name)) {
             localMeta = parseBitmap(bytes); localType = 'bmp';
-            localUploadName = 'work.bmp';
+            localUploadName = safeSdName(file.name) ? file.name : 'work.bmp';
             byId('c2-bmp-offset-x').value = localMeta.offsetX.toFixed(1);
             byId('c2-bmp-offset-y').value = localMeta.offsetY.toFixed(1);
             const dpiX = localMeta.pxPerMmX * 25.4, dpiY = localMeta.pxPerMmY * 25.4;
             const dpiText = Math.abs(dpiX - dpiY) < .1 ? Math.round(dpiX) + ' DPI' : Math.round(dpiX) + ' × ' + Math.round(dpiY) + ' DPI';
             byId('c2-file-info').textContent = file.name + ' · ' + localMeta.width + ' × ' + localMeta.height + ' · ' + localMeta.bits + '-bit · ' + dpiText + ' · ' + bytes.length.toLocaleString() + ' bytes';
-          } else if (/\.gcode$/i.test(file.name)) {
+          } else if (/\.(?:gcode|nc|txt)$/i.test(file.name)) {
             validateGcode(bytes); localType = 'gcode';
             localUploadName = safeSdName(file.name) ? file.name : 'work.gcode';
-            byId('c2-file-info').textContent = file.name + ' · ASCII · ' + bytes.length.toLocaleString() + ' bytes';
-          } else throw new Error('僅支援 .bmp 或 .gcode。');
+            byId('c2-file-info').textContent = file.name + ' · v1.69 相容解析 · ' + bytes.length.toLocaleString() + ' bytes';
+          } else throw new Error('僅支援 .bmp、.gcode、.nc 或 .txt。');
           localBytes = bytes;
+          byId('c2-upload-name').value = localUploadName;
           renderLocalPreview();
         } catch (error) {
           setMessage(errText(error), true);
@@ -2368,15 +2608,15 @@
           ble.polling = true;
           bleRequest('STATUS').catch(() => {}).finally(() => { ble.polling = false; });
         }
-        if (usbReady() && !usb.polling) {
+        if (usb.link?.running && !usb.polling) {
           usb.polling = true;
-          request('STATUS', 'usb').catch(() => { usb.at = -Infinity; renderDevice(); }).finally(() => { usb.polling = false; });
+          request(usb.info ? 'STATUS' : 'HELLO', 'usb').catch(() => { usb.at = -Infinity; renderDevice(); }).finally(() => { usb.polling = false; });
         }
-      }, 500);
+      }, 1000);
 
       if (!isSecureContext) setMessage('Bluetooth 與 USB 連線需要 localhost 或 HTTPS。', true);
       else if (!navigator.bluetooth && !navigator.serial) setMessage('此瀏覽器不支援 Bluetooth 或 USB 連線。', true);
-      try { byId('c2-preview-machine').value = localStorage.getItem('cubiio2-project-machine') || 'A4'; } catch (_) { byId('c2-preview-machine').value = 'A4'; }
+      byId('c2-preview-machine').value = 'A4';
       window.Cubiio2Device = {
         status: () => ({ connected: bleReady() || Boolean(usb.link?.running), usb: Boolean(usb.link?.running), ble: bleReady(), transport: selectedTransport(), ready: fresh() }),
         snapshot: () => info(),
@@ -2405,8 +2645,8 @@
       const wrap = $('project-canvas-wrap');
       const context = canvas.getContext('2d');
       const MACHINES = {
-        A4: { name: 'A4', width: 297, height: 210 },
-        A3: { name: 'A3', width: 420, height: 297 }
+        A4: { name: 'A4', width: 300, height: 210 },
+        A3: { name: 'A3', width: 420, height: 300 }
       };
       const BMP_NATIVE_PX_PER_MM = 10;
       const BMP_1BIT_PX_PER_MM = 10;
@@ -4026,6 +4266,12 @@
         }
         markProjectChanged(); resetProjectView(); updateLayerControls();
       });
+      document.addEventListener('cubiio2-device-status', (event) => {
+        const snapshot = window.Cubiio2Device?.snapshot?.();
+        const lockedToDevice = Boolean(event.detail?.connected && ['PL-02', 'PL-02B'].includes(snapshot?.model));
+        $('project-machine').disabled = lockedToDevice;
+        $('project-machine').title = lockedToDevice ? '已依連線裝置的 pref.cfg model 鎖定' : '';
+      });
       $('project-reset-view').addEventListener('click', resetProjectView);
       $('project-add-text').addEventListener('click', addTextLayer);
       $('project-file-input').addEventListener('change', async () => {
@@ -4104,8 +4350,8 @@
         flow: null, step: 1, jog: 1, x: 0, y: 0, power: 20,
         focusValue: '', calibrationStarted: false, completed: false,
         firmwareDownloaded: false, busy: false, laserOn: false,
-        homeX: 0, homeY: 0, travelX: 0, travelY: 0,
-        savedWidth: 0, savedHeight: 0
+        baseCaliX: 0, baseCaliY: 0, travelX: 0, travelY: 0,
+        savedCaliX: 0, savedCaliY: 0, focusBase: null
       };
       let lastConnectionKey = '';
 
@@ -4115,7 +4361,7 @@
       const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const quantizeMm = (mm) => Math.sign(mm) * Math.floor(Math.abs(mm) * 80 + .5) / 80;
       const flowMeta = () => ({
-        zero: { title: text('校正零點', 'Zero calibration'), total: 4 },
+        zero: { title: text('校正零點', 'Zero calibration'), total: 3 },
         focus: { title: text('校正對焦', 'Focus calibration'), total: 4 },
         firmware: { title: text('韌體更新', 'Firmware update'), total: 2 }
       })[state.flow];
@@ -4154,24 +4400,6 @@
         state.laserOn = false;
       }
 
-      function calibrationConfigCommand(width, height, status) {
-        const gc = status?.gc;
-        const cfg = gc?.cfg;
-        if (!Array.isArray(cfg) || cfg.length < 6) throw new Error(text('無法讀取目前的機台設定。', 'Current machine settings could not be read.'));
-        const values = [width, height, Number(cfg[2]), Number(cfg[3]), Number(cfg[4]), Number(cfg[5])];
-        const bounds = [[10, 1000], [10, 1000], [1, 500], [.001, .1], [60, 2400], [1, 65535]];
-        values.forEach((value, index) => {
-          if (!Number.isFinite(value) || value < bounds[index][0] || value > bounds[index][1]) {
-            throw new Error(text('量測結果或既有機台設定超出允許範圍。', 'The measured result or current machine setting is out of range.'));
-          }
-        });
-        const workspace = ['A4', 'A3'].includes(gc.workspace) ? gc.workspace : 'A4';
-        const dynamic = cfg.length > 8 ? Number(Boolean(Number(cfg[8]))) : 1;
-        const comp = Number(gc.comp_k);
-        const suffix = Number.isFinite(comp) && comp >= 0 && comp <= 2 ? ` K${comp.toFixed(4)}` : '';
-        return `GCONFIG ${values.join(' ')} D${dynamic} ${workspace}${suffix}`;
-      }
-
       async function startZeroCalibration() {
         state.busy = true;
         renderStep();
@@ -4180,24 +4408,30 @@
           ensureCalibrationConnection();
           await safeZeroStop();
           await deviceCommand('HOME', 8000);
-          const status = await waitForDevice(
+          await waitForDevice(
             (value) => value?.gc?.homed && !value?.gc?.busy && !value?.io?.busy,
             60000,
             text('HOME 逾時，請檢查感測器與滑軌。', 'HOME timed out. Check the sensors and rails.')
           );
-          const cfg = status?.gc?.cfg;
-          if (!Array.isArray(cfg) || cfg.length < 6) throw new Error(text('無法讀取目前的機台設定。', 'Current machine settings could not be read.'));
-          state.homeX = Number.isFinite(Number(status.gc.x)) ? Number(status.gc.x) : Number(cfg[0]);
-          state.homeY = Number.isFinite(Number(status.gc.y)) ? Number(status.gc.y) : Number(cfg[1]);
+          setStatus(text('HOME 完成，正在移動至目前 ZERO。', 'HOME complete. Moving to the current ZERO.'));
+          await deviceCommand('ZERO', 8000);
+          const status = await waitForDevice(
+            (value) => value?.gc?.homed && value?.gc?.known && !value?.gc?.busy && !value?.io?.busy && value?.gc?.state === 'DONE',
+            60000,
+            text('ZERO 逾時，請檢查機器定位狀態。', 'ZERO timed out. Check the machine position state.')
+          );
+          state.baseCaliX = Number(status.cali_x);
+          state.baseCaliY = Number(status.cali_y);
+          if (![state.baseCaliX, state.baseCaliY].every(Number.isFinite)) throw new Error(text('無法讀取 pref.cfg 的 cali_x／cali_y。', 'Unable to read cali_x/cali_y from pref.cfg.'));
           state.travelX = 0; state.travelY = 0;
-          state.x = state.homeX; state.y = state.homeY;
+          state.x = state.baseCaliX; state.y = state.baseCaliY;
           await deviceCommand('XYEN 0', 3000);
           await deviceCommand('DAC 255', 3000);
           await deviceCommand('PWM 10', 3000);
           await deviceCommand('LON', 3000);
           state.laserOn = true;
           state.step = 2;
-          setStatus(text('HOME 完成，已開啟 S10 弱光。使用同步向量將光點移到左下角零點。', 'HOME complete and S10 positioning light is on. Use synchronized vectors to move the dot to the lower-left zero.'));
+          setStatus(text(`HOME／ZERO 完成，S10 弱光已開啟。目前 cali_x=${state.baseCaliX.toFixed(3)}、cali_y=${state.baseCaliY.toFixed(3)} mm。`, `HOME/ZERO complete and S10 positioning light is on. Current cali_x=${state.baseCaliX.toFixed(3)}, cali_y=${state.baseCaliY.toFixed(3)} mm.`));
         } catch (error) {
           await safeZeroStop(true);
           setStatus(error?.message || String(error));
@@ -4224,9 +4458,10 @@
           );
           state.travelX = quantizeMm(state.travelX + moveX);
           state.travelY = quantizeMm(state.travelY + moveY);
-          state.x = quantizeMm(state.homeX + state.travelX);
-          state.y = quantizeMm(state.homeY + state.travelY);
-          setStatus(text(`已移動 LINE ${moveX} ${moveY} 600；相對 HOME：X ${state.travelX.toFixed(3)}、Y ${state.travelY.toFixed(3)} mm。`, `Moved LINE ${moveX} ${moveY} 600; relative to HOME: X ${state.travelX.toFixed(3)}, Y ${state.travelY.toFixed(3)} mm.`));
+          state.x = quantizeMm(state.baseCaliX - state.travelX);
+          state.y = quantizeMm(state.baseCaliY - state.travelY);
+          if ([state.x, state.y].some((value) => value < -100 || value > 100)) throw new Error(text('吋動後的 cali_x／cali_y 超出 -100～100 mm。', 'The jogged cali_x/cali_y is outside -100 to 100 mm.'));
+          setStatus(text(`已移動 LINE ${moveX} ${moveY} 600；候選 cali_x=${state.x.toFixed(3)}、cali_y=${state.y.toFixed(3)} mm。`, `Moved LINE ${moveX} ${moveY} 600; proposed cali_x=${state.x.toFixed(3)}, cali_y=${state.y.toFixed(3)} mm.`));
         } catch (error) {
           await safeZeroStop(true);
           state.step = 1; state.travelX = 0; state.travelY = 0;
@@ -4240,34 +4475,80 @@
       async function saveZeroCalibration() {
         state.busy = true;
         renderStep();
-        setStatus(text('正在把量測結果寫入 SD /config.sys。', 'Writing the measured result to SD /config.sys.'));
+        setStatus(text('正在關閉弱光並寫入新的 cali_x／cali_y。', 'Turning off the positioning light and writing the new cali_x/cali_y.'));
         try {
-          const width = quantizeMm(-state.travelX);
-          const height = quantizeMm(-state.travelY);
-          if (width < 10 || height < 10 || width > 1000 || height > 1000) {
-            throw new Error(text('零點必須位於 HOME 的左下方，X／Y 量測距離須各為 10–1000 mm。', 'Zero must be below-left of HOME, with X and Y travel each between 10 and 1000 mm.'));
-          }
           ensureCalibrationConnection();
-          let status = await readDeviceStatus();
-          const saved = await deviceCommand(calibrationConfigCommand(width, height, status), 10000);
-          if (!saved?.gc?.cfg || Math.abs(Number(saved.gc.cfg[0]) - width) > .0125 || Math.abs(Number(saved.gc.cfg[1]) - height) > .0125) {
-            throw new Error(text('SD 校正值回讀驗證失敗，未完成校正。', 'SD calibration read-back verification failed.'));
-          }
+          const x = quantizeMm(state.x), y = quantizeMm(state.y);
+          if ([x, y].some((value) => !Number.isFinite(value) || value < -100 || value > 100)) throw new Error(text('cali_x／cali_y 必須在 -100～100 mm。', 'cali_x/cali_y must be within -100 to 100 mm.'));
           await deviceCommand('LOFF', 3000);
           state.laserOn = false;
-          setStatus(text('已儲存 /config.sys，正在以新尺寸重新 HOME。', 'Saved /config.sys. Homing again with the new dimensions.'));
-          await deviceCommand('HOME', 8000);
-          status = await waitForDevice(
-            (value) => value?.gc?.homed && !value?.gc?.busy && !value?.io?.busy,
-            60000,
-            text('設定已儲存，但返回 HOME 逾時；請檢查機器。', 'Settings were saved, but the return to HOME timed out. Check the machine.')
-          );
-          state.savedWidth = width; state.savedHeight = height;
-          state.x = 0; state.y = 0; state.step = 4; state.completed = true;
-          setStatus(text(`零點校正完成：X ${width.toFixed(3)} mm、Y ${height.toFixed(3)} mm 已儲存至 SD /config.sys。`, `Zero calibration complete: X ${width.toFixed(3)} mm and Y ${height.toFixed(3)} mm saved to SD /config.sys.`));
+          const saved = await deviceCommand(`GOFFSET ${x} ${y}`, 10000);
+          if (Math.abs(Number(saved?.cali_x) - x) > .0125 || Math.abs(Number(saved?.cali_y) - y) > .0125 || saved?.gc?.config_state !== 'SAVED') {
+            throw new Error(text('pref.cfg ZERO offset 回讀驗證失敗，未完成校正。', 'The pref.cfg ZERO offset read-back verification failed.'));
+          }
+          state.savedCaliX = x; state.savedCaliY = y;
+          state.step = 3; state.completed = true;
+          setStatus(text(`零點校正完成：cali_x=${x.toFixed(3)}、cali_y=${y.toFixed(3)} mm 已儲存至 pref.cfg。`, `Zero calibration complete: cali_x=${x.toFixed(3)}, cali_y=${y.toFixed(3)} mm saved to pref.cfg.`));
         } catch (error) {
           await safeZeroStop(true);
           state.step = 1; state.travelX = 0; state.travelY = 0;
+          setStatus(error?.message || String(error));
+        } finally {
+          state.busy = false;
+          renderStep();
+        }
+      }
+
+      async function startFocusCalibration() {
+        if (state.busy) return;
+        state.busy = true;
+        state.calibrationStarted = true;
+        renderStep();
+        setStatus(text(`正在送出 VTEST，功率 ${state.power}%；機器會自動 HOME、ZERO 並加工 150／200／250／300。`, `Starting VTEST at ${state.power}%; the machine will HOME, ZERO, and engrave 150/200/250/300 automatically.`));
+        try {
+          ensureCalibrationConnection();
+          const before = await readDeviceStatus();
+          const focusBase = Number(before?.focus?.f_base);
+          if (Number.isFinite(focusBase)) state.focusBase = focusBase;
+          await deviceCommand(`VTEST ${state.power}`, 5000);
+          let observed = false;
+          const startedAt = performance.now();
+          while (performance.now() - startedAt < 240000) {
+            const status = await readDeviceStatus();
+            const phase = status?.sys?.task_start || '';
+            if (status?.sys?.task_start_error) throw new Error(status.sys.task_start_error);
+            if (status?.gc?.error) throw new Error(status.gc.error + (status.gc.el ? `（line ${status.gc.el}）` : ''));
+            if (status?.gc?.busy || status?.gc?.name === 'VTEST' || ['HOMING', 'POSITIONING', 'STARTING', 'STARTED'].includes(phase)) observed = true;
+            if (observed && !status?.gc?.busy && phase === 'STARTED' && status?.gc?.state === 'DONE') {
+              state.step = 3;
+              setStatus(text('VTEST 已完成並返回等待位置。請選擇加工最深且最清楚的數字。', 'VTEST finished and returned to the waiting position. Choose the darkest, clearest number.'));
+              return;
+            }
+            await delay(250);
+          }
+          throw new Error(text('VTEST 等待完成逾時，請檢查機器狀態。', 'Timed out waiting for VTEST to finish. Check the machine state.'));
+        } catch (error) {
+          await deviceCommand('GSTOP', 3000).catch(() => {});
+          state.calibrationStarted = false;
+          setStatus(error?.message || String(error));
+        } finally {
+          state.busy = false;
+          renderStep();
+        }
+      }
+
+      async function applyFocusValue() {
+        if (state.busy) return;
+        state.busy = true;
+        renderStep();
+        try {
+          ensureCalibrationConnection();
+          const value = Number(state.focusValue);
+          if (![150, 200, 250, 300].includes(value)) throw new Error(text('請選擇有效的 VCM 校正值。', 'Choose a valid VCM calibration value.'));
+          await deviceCommand(`VCM ${value}`, 3000);
+          state.completed = true;
+          setStatus(text(`已套用 VCM ${value}。v1.69 的對焦 EEPROM 為唯讀，因此此值只保留到重新開機。`, `VCM ${value} is applied. The focus EEPROM is read-only in v1.69, so this value lasts until restart.`));
+        } catch (error) {
           setStatus(error?.message || String(error));
         } finally {
           state.busy = false;
@@ -4299,15 +4580,15 @@
       function zeroStep() {
         if (state.step === 1) return `
           <div class="maintenance-step">
-            <h3>${text('HOME 並啟動定位弱光', 'Home and turn on positioning light')}</h3>
-            <p>${text('機器會先回到右上角 HOME，再以 DAC 255／PWM 10 開啟 S10 弱光。請勿直視光點。', 'The machine first homes to the upper-right corner, then turns on the S10 positioning light with DAC 255 / PWM 10. Do not look directly at the beam.')}</p>
-            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-laser" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在 HOME…', 'Homing…') : text('開始校正', 'Start calibration')}</button></div>
+            <h3>${text('HOME、ZERO 並啟動定位弱光', 'HOME, ZERO, and turn on positioning light')}</h3>
+            <p>${text('機器會依序執行 HOME → ZERO，再以 DAC 255／PWM 10 開啟 S10 弱光。請勿直視光點。', 'The machine runs HOME → ZERO, then turns on the S10 positioning light with DAC 255 / PWM 10. Do not look directly at the beam.')}</p>
+            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-laser" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在定位…', 'Positioning…') : text('開始校正', 'Start calibration')}</button></div>
           </div>`;
         if (state.step === 2) return `
           <div class="maintenance-step">
-            <h3>${text('將光點移至左下角', 'Move the dot to the lower-left corner')}</h3>
-            <p>${text('選擇吋動距離，再使用方向鍵微調位置。', 'Choose a jog distance, then use the arrow controls to fine-tune the position.')}</p>
-            <div class="coordinate-strip"><div>X&nbsp; ${state.x.toFixed(3)} mm</div><div>Y&nbsp; ${state.y.toFixed(3)} mm</div></div>
+            <h3>${text('微調 ZERO offset', 'Fine-tune the ZERO offset')}</h3>
+            <p>${text(`pref.cfg 目前值：cali_x ${state.baseCaliX.toFixed(3)} mm、cali_y ${state.baseCaliY.toFixed(3)} mm。方向鍵吋動後，下方會顯示將寫入的新值。`, `Current pref.cfg values: cali_x ${state.baseCaliX.toFixed(3)} mm, cali_y ${state.baseCaliY.toFixed(3)} mm. The proposed values update below after every jog.`)}</p>
+            <div class="coordinate-strip"><div><span class="field-label">cali_x</span>${state.x.toFixed(3)} mm</div><div><span class="field-label">cali_y</span>${state.y.toFixed(3)} mm</div></div>
             <div class="jog-layout">
               <div class="jog-pad" aria-label="XY jog controls">
                 <button class="action-button" type="button" data-jog-y="1" aria-label="Y positive" ${state.busy ? 'disabled' : ''}>↑</button>
@@ -4321,45 +4602,46 @@
                 <div class="segmented-control grid-cols-3">
                   ${[.1, 1, 10].map((value) => `<button type="button" data-jog-step="${value}" aria-pressed="${state.jog === value}" ${state.busy ? 'disabled' : ''}>${value} mm</button>`).join('')}
                 </div>
-                <button class="action-button primary mt-4 w-full" type="button" data-action="zero-positioned" ${state.busy ? 'disabled' : ''}>${state.busy ? text('移動中…', 'Moving…') : text('位置已對準', 'Position aligned')}</button>
+                <button class="action-button primary mt-4 w-full" type="button" data-action="zero-positioned" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在寫入…', 'Saving…') : text('位置已對準', 'Position aligned')}</button>
               </div>
             </div>
-          </div>`;
-        if (state.step === 3) return `
-          <div class="maintenance-step">
-            <h3>${text('設定目前位置為零點', 'Set the current position as zero')}</h3>
-            <p>${text('將以 HOME 到目前位置的同步向量距離計算 X／Y 尺寸，並寫入 SD /config.sys。', 'The synchronized-vector distance from HOME to the current position becomes the X/Y dimensions and is written to SD /config.sys.')}</p>
-            <div class="maintenance-result">${text('量測尺寸', 'Measured size')}&nbsp;&nbsp;X ${quantizeMm(-state.travelX).toFixed(3)} mm&nbsp;&nbsp;·&nbsp;&nbsp;Y ${quantizeMm(-state.travelY).toFixed(3)} mm</div>
-            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="zero-confirm" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在儲存…', 'Saving…') : text('儲存零點到 SD', 'Save zero to SD')}</button><button class="action-button" type="button" data-action="zero-back-jog" ${state.busy ? 'disabled' : ''}>${text('返回微調', 'Back to jog')}</button></div>
           </div>`;
         return `
           <div class="maintenance-step">
             <h3>${text('零點校正完成', 'Zero calibration complete')}</h3>
-            <p>${text('弱光已關閉，設定已寫入 SD /config.sys，雷射頭已回到 HOME 等待位置。', 'The positioning light is off, settings are saved to SD /config.sys, and the laser head is back at HOME.')}</p>
-            <div class="maintenance-result">X ${state.savedWidth.toFixed(3)} mm&nbsp;&nbsp;·&nbsp;&nbsp;Y ${state.savedHeight.toFixed(3)} mm</div>
+            <p>${text('弱光已關閉，新的 ZERO offset 已寫入 SD /_sys/_cfg/pref.cfg。下次 HOME／ZERO 會使用此設定。', 'The positioning light is off and the new ZERO offset is saved in SD /_sys/_cfg/pref.cfg. The next HOME/ZERO uses this setting.')}</p>
+            <div class="maintenance-result">cali_x&nbsp;&nbsp;${state.savedCaliX.toFixed(3)} mm&nbsp;&nbsp;·&nbsp;&nbsp;cali_y&nbsp;&nbsp;${state.savedCaliY.toFixed(3)} mm</div>
             <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="finish">${text('完成', 'Done')}</button></div>
           </div>`;
       }
 
       function focusStep() {
+        const baseText = Number.isFinite(state.focusBase) ? String(state.focusBase) : text('無法讀取', 'Unavailable');
+        const chosen = Number(state.focusValue);
+        const deltaText = Number.isFinite(state.focusBase) && Number.isFinite(chosen) && state.focusValue
+          ? `${chosen - state.focusBase >= 0 ? '+' : ''}${chosen - state.focusBase}`
+          : '\u2014';
         if (state.step === 1) return `
           <div class="maintenance-step">
             <h3>${text('放置校正色紙', 'Place the calibration paper')}</h3>
             <p>${text('將 A4 色紙貼齊工作區左下角，保持平整並關上上蓋。', 'Align an A4 sheet of coloured paper with the lower-left corner, keep it flat, and close the lid.')}</p>
+            <div class="maintenance-result">${text('目前 pref.cfg f_base', 'Current pref.cfg f_base')}&nbsp;&nbsp;${baseText}</div>
             <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="focus-paper">${text('已放置並關上上蓋', 'Paper placed and lid closed')}</button></div>
           </div>`;
         if (state.step === 2) return `
           <div class="maintenance-step">
             <h3>${text('設定雷射強度', 'Set laser power')}</h3>
             <p>${text('建議使用 20%。開始後會在色紙上加工四組校正數字。', '20% is recommended. The machine will engrave four calibration numbers on the paper.')}</p>
+            <div class="maintenance-result">f_base&nbsp;&nbsp;${baseText}</div>
             <label for="maintenance-focus-power" class="field-label mt-5">${text('雷射強度', 'Laser power')} · <output id="maintenance-focus-power-value">${state.power}%</output></label>
             <input id="maintenance-focus-power" class="w-full" type="range" min="1" max="100" value="${state.power}">
-            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="focus-start">${text('開始校正加工', 'Start calibration engraving')}</button></div>
+            <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="focus-start" ${state.busy ? 'disabled' : ''}>${state.busy ? text('正在執行 VTEST…', 'Running VTEST…') : text('開始校正加工', 'Start calibration engraving')}</button></div>
           </div>`;
         if (state.step === 3) return `
           <div class="maintenance-step">
             <h3>${text('選擇最深的數字', 'Choose the darkest number')}</h3>
             <p>${text('觀察色紙上的加工結果，選擇顏色最深且線條最清楚的數字。', 'Inspect the engraved result and choose the darkest, clearest number.')}</p>
+            <div class="maintenance-result">${text('目前 f_base', 'Current f_base')}&nbsp;&nbsp;${baseText}</div>
             <div class="maintenance-choice-grid">
               ${[150, 200, 250, 300].map((value) => `<button class="action-button" type="button" data-focus-value="${value}" aria-pressed="${state.focusValue === String(value)}">${value}</button>`).join('')}
             </div>
@@ -4368,14 +4650,15 @@
         if (state.completed) return `
           <div class="maintenance-step">
             <h3>${text('對焦校正完成', 'Focus calibration complete')}</h3>
-            <p>${text(`已記錄校正值 ${state.focusValue}。`, `Calibration value ${state.focusValue} has been saved.`)}</p>
+            <p>${text(`已套用 VCM ${state.focusValue}；與目前 f_base ${baseText} 相差 ${deltaText}。v1.69 不提供永久寫入對焦 EEPROM 的指令。`, `VCM ${state.focusValue} is applied; the difference from current f_base ${baseText} is ${deltaText}. v1.69 does not provide a persistent focus-EEPROM write command.`)}</p>
+            <div class="maintenance-result">f_base&nbsp;&nbsp;${baseText}&nbsp;&nbsp;→&nbsp;&nbsp;VCM&nbsp;&nbsp;${state.focusValue}&nbsp;&nbsp;(${deltaText})</div>
             <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="finish">${text('完成', 'Done')}</button></div>
           </div>`;
         return `
           <div class="maintenance-step">
             <h3>${text('確認對焦校正值', 'Confirm the focus calibration value')}</h3>
-            <p>${text('確認後將保存此數值，作為 Cubiio2 的對焦基準。', 'This value will be saved as the Cubiio2 focus reference.')}</p>
-            <div class="maintenance-result">${text('校正值', 'Calibration value')}&nbsp;&nbsp;${state.focusValue}</div>
+            <p>${text('確認後會用 VCM 指令套用此數值；v1.69 僅支援本次開機的暫時設定。', 'Confirming applies this value with VCM; v1.69 supports a temporary setting for the current boot only.')}</p>
+            <div class="maintenance-result">f_base&nbsp;&nbsp;${baseText}&nbsp;&nbsp;→&nbsp;&nbsp;${text('選擇值', 'Selected')}&nbsp;&nbsp;${state.focusValue}&nbsp;&nbsp;(${deltaText})</div>
             <div class="maintenance-actions"><button class="action-button primary" type="button" data-action="focus-confirm">${text('確認', 'Confirm')}</button><button class="action-button" type="button" data-action="focus-back-select">${text('重新選擇', 'Choose again')}</button></div>
           </div>`;
       }
@@ -4411,12 +4694,15 @@
       }
 
       function openFlow(flow) {
+        const snapshot = window.Cubiio2Device?.snapshot?.();
+        const focusBase = Number(snapshot?.focus?.f_base);
         Object.assign(state, {
           flow, step: 1, jog: 1, x: 0, y: 0, power: 20,
           focusValue: '', calibrationStarted: false, completed: false,
           firmwareDownloaded: false, busy: false, laserOn: false,
-          homeX: 0, homeY: 0, travelX: 0, travelY: 0,
-          savedWidth: 0, savedHeight: 0
+          baseCaliX: 0, baseCaliY: 0, travelX: 0, travelY: 0,
+          savedCaliX: 0, savedCaliY: 0,
+          focusBase: Number.isFinite(focusBase) ? focusBase : null
         });
         byId('maintenance-menu').hidden = true;
         byId('maintenance-flow').hidden = false;
@@ -4453,14 +4739,12 @@
         if (target.dataset.focusValue) { state.focusValue = target.dataset.focusValue; renderStep(); return; }
         switch (target.dataset.action) {
           case 'zero-laser': await startZeroCalibration(); return;
-          case 'zero-positioned': state.step = 3; break;
-          case 'zero-back-jog': state.step = 2; break;
-          case 'zero-confirm': await saveZeroCalibration(); return;
+          case 'zero-positioned': await saveZeroCalibration(); return;
           case 'focus-paper': state.step = 2; break;
-          case 'focus-start': state.step = 3; state.calibrationStarted = true; setStatus(text(`校正加工介面已啟動，雷射強度 ${state.power}%；加工指令待韌體對接。`, `Calibration engraving UI activated at ${state.power}%; the machining command is pending firmware integration.`)); break;
+          case 'focus-start': await startFocusCalibration(); return;
           case 'focus-selected': state.step = 4; break;
           case 'focus-back-select': state.step = 3; break;
-          case 'focus-confirm': state.completed = true; setStatus(text(`對焦值 ${state.focusValue} 已在介面確認；寫入指令待韌體對接。`, `Focus value ${state.focusValue} confirmed in the UI; the write command is pending firmware integration.`)); break;
+          case 'focus-confirm': await applyFocusValue(); return;
           case 'firmware-download': state.step = 2; state.firmwareDownloaded = true; setStatus(text('下載按鈕與 USB 條件已完成；韌體來源尚待接入。', 'The download control and USB requirement are ready; the firmware source is pending integration.')); break;
           case 'firmware-update': state.completed = true; setStatus(text('更新流程介面已完成；燒錄通訊尚待接入。', 'The update flow UI is complete; flashing transport is pending integration.')); break;
           case 'finish': closeFlow(); return;
